@@ -1,0 +1,16 @@
+node_modules/
+.expo/
+dist/
+build/
+.env
+.env.local
+.env.*
+.prisma/
+*.log
+implementation_plan.md
+CHANGELOG.md   
+README.md
+SETUP.md
+IMPLEMENTED_FEATURES.md
+README.md
+SETUP.md

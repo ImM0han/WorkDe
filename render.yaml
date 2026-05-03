@@ -1,0 +1,35 @@
+services:
+  # The Node.js Backend Server
+  - type: web
+    name: gigwork-backend
+    env: node
+    # Since the git repository is in the 'apps' folder, the backend is right here
+    rootDir: backend
+    # Build command installs dependencies and compiles TypeScript
+    buildCommand: npm install && npx prisma generate && npm run build
+    # Start command runs the compiled JavaScript
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false # You must set this manually in the Render dashboard
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: gigwork-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true # Render will generate a secure random string automatically
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: SOCKET_CORS_ORIGIN
+        value: "*" # Or your production frontend URL
+      - key: NODE_ENV
+        value: production
+
+  # The Redis Instance for Geo-Matching
+  - type: redis
+    name: gigwork-redis
+    ipAllowList: [] # Only allow internal Render services to connect for security
+    plan: free # Can upgrade if needed
