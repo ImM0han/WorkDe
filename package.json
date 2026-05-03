@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Root package.json to help Railway detect Node.js",
   "scripts": {
-    "install": "cd backend && npm install",
+    "install": "cd backend && npm install --include=dev",
     "build": "cd backend && npx prisma generate && npm run build",
     "start": "cd backend && npm start"
   }
