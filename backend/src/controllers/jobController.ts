@@ -76,7 +76,9 @@ export const acceptJob = async (req: AuthRequest, res: Response): Promise<void> 
     // Try to import sendPushNotification, ignore if it doesn't exist
     try {
       const { sendPushNotification } = await import('../services/pushService');
-      await sendPushNotification(updatedJob.clientId, 'JOB_ACCEPTED', { partnerName: partner.user.name });
+      if (partner) {
+        await sendPushNotification(updatedJob.clientId, 'JOB_ACCEPTED', { partnerName: partner.user.name });
+      }
     } catch (e) {}
 
     res.json(updatedJob);

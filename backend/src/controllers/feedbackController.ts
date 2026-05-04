@@ -18,26 +18,27 @@ export const submitFeedback = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    const review = await prisma.review.create({
+    const review = await prisma.feedback.create({
       data: {
         jobId,
-        clientId: clientId as string,
-        partnerId: job.partnerId,
         rating,
         comment
       }
     });
 
     // Update partner average rating
-    const partnerReviews = await prisma.review.aggregate({
+    const partnerJobs = await prisma.job.findMany({
       where: { partnerId: job.partnerId },
-      _avg: { rating: true }
+      select: { feedback: { select: { rating: true } } }
     });
 
-    if (partnerReviews._avg.rating) {
+    const ratings = partnerJobs.map(j => j.feedback?.rating).filter((r): r is number => r != null);
+
+    if (ratings.length > 0) {
+      const avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
       await prisma.partner.update({
         where: { id: job.partnerId },
-        data: { rating: partnerReviews._avg.rating }
+        data: { rating: avgRating }
       });
     }
 
