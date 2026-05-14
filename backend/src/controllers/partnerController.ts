@@ -151,7 +151,8 @@ export const getPartnerProfile = async (req: AuthRequest, res: Response): Promis
       where: { id },
       include: {
         user: { select: { name: true, phone: true } },
-        certificates: true
+        certificates: true,
+        bankAccounts: true
       }
     });
 
