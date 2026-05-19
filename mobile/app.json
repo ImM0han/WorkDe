@@ -1,0 +1,80 @@
+{
+  "expo": {
+    "name": "GigWork",
+    "slug": "gigwork",
+    "version": "1.0.0",
+    "scheme": "gigwork",
+    "sdkVersion": "54.0.0",
+    "newArchEnabled": true,
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1A0C02"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.gigwork.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "GigWork uses your location to show nearby jobs.",
+        "NSLocationAlwaysUsageDescription": "GigWork tracks partner location so clients can track arrival.",
+        "NSCameraUsageDescription": "Upload work completion photos.",
+        "NSPhotoLibraryUsageDescription": "Upload certificates and profile photos."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#1A0C02"
+      },
+      "package": "com.gigwork.app",
+      "versionCode": 3,
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "GigWork uses location for job matching."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#FF6B1A"
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "GigWork needs photo access for uploads."
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e6e7c180-56aa-4ad2-b569-abbe79671225"
+      }
+    }
+  }
+}
