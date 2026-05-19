@@ -79,16 +79,44 @@ export const skillBadgeColors: Record<string, { bg: string; text: string; border
   Painter:     { bg:'#FFF0F7', text:'#9B2C6A', border:'#FDB5D9' },
   Gardener:    { bg:'#F0FBEB', text:'#2D6A1A', border:'#BBF7A3' },
   Driver:      { bg:'#F3F0FF', text:'#5B3DB5', border:'#C4B5FD' },
+  Loading:     { bg:'#EEF2FF', text:'#3730A3', border:'#C7D2FE' },
+  Farming:     { bg:'#F0FBEB', text:'#2D6A1A', border:'#BBF7A3' },
+  Cook:        { bg:'#FFF5EB', text:'#C05621', border:'#FDD0A2' },
+  Babysitter:  { bg:'#FFF0F7', text:'#9B2C6A', border:'#FDB5D9' },
+  Beautician:  { bg:'#FDF0FF', text:'#7E22CE', border:'#E9D5FF' },
+  EventSetup:  { bg:'#FFFBEB', text:'#B45309', border:'#FDE68A' },
+  Waiter:      { bg:'#F5F0FF', text:'#5B3DB5', border:'#C4B5FD' },
 };
 
 export const categoryIcons: Record<string, string> = {
   Mason: '🧱', Cleaner: '🧹', Electrician: '⚡',
   Carpenter: '🪚', Plumber: '🔧', Painter: '🎨',
   Gardener: '🌿', Driver: '🚗',
+  Loading: '📦', Farming: '🌾', Cook: '👨‍🍳',
+  Babysitter: '👶', Beautician: '💆', EventSetup: '🎪',
+  Waiter: '🍽️',
 };
 
 export const categoryBgColors: Record<string, string> = {
   Mason: '#F5EFEA', Cleaner: '#EBFFF9', Electrician: '#FFFBEB',
   Carpenter: '#FFF5EB', Plumber: '#EBF5FF', Painter: '#FFF0F7',
   Gardener: '#F0FBEB', Driver: '#F3F0FF',
+  Loading: '#F0F4FF', Farming: '#F0FBEB', Cook: '#FFF5EB',
+  Babysitter: '#FFF0F7', Beautician: '#FDF0FF', EventSetup: '#FFFBEB',
+  Waiter: '#F5F0FF',
+};
+
+export const groupJobCategories = ['Loading', 'EventSetup', 'Waiter'];
+export const femaleOnlyCategories = ['Babysitter', 'Beautician'];
+export const seasonalCategories = ['Farming'];
+export const materialCategories = ['Cook', 'Beautician'];
+
+export const categoryRateDefaults: Record<string, { rateType: 'HOURLY' | 'DAILY'; suggestedMin: number; suggestedMax: number; unit: string }> = {
+  Loading:    { rateType: 'DAILY',  suggestedMin: 500, suggestedMax: 800,  unit: 'per worker/day' },
+  Farming:    { rateType: 'DAILY',  suggestedMin: 300, suggestedMax: 500,  unit: 'per worker/day' },
+  Cook:       { rateType: 'DAILY',  suggestedMin: 400, suggestedMax: 1200, unit: 'per day' },
+  Babysitter: { rateType: 'DAILY',  suggestedMin: 600, suggestedMax: 1200, unit: 'per day' },
+  Beautician: { rateType: 'HOURLY', suggestedMin: 300, suggestedMax: 800,  unit: 'per session' },
+  EventSetup: { rateType: 'DAILY',  suggestedMin: 500, suggestedMax: 800,  unit: 'per worker/day' },
+  Waiter:     { rateType: 'DAILY',  suggestedMin: 500, suggestedMax: 800,  unit: 'per worker/day' },
 };

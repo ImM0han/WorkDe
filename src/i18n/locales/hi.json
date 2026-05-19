@@ -1,0 +1,164 @@
+{
+  "app": {
+    "name": "GigWork",
+    "tagline": "कुशल भारत को सशक्त बनाना"
+  },
+  "common": {
+    "continue": "जारी रखें",
+    "submit": "जमा करें",
+    "cancel": "रद्द करें",
+    "save": "सहेजें",
+    "edit": "संपादित करें",
+    "delete": "हटाएं",
+    "confirm": "पुष्टि करें",
+    "back": "वापस",
+    "next": "अगला",
+    "skip": "छोड़ें",
+    "loading": "लोड हो रहा है...",
+    "retry": "पुनः प्रयास",
+    "close": "बंद करें",
+    "yes": "हाँ",
+    "no": "नहीं",
+    "search": "खोजें",
+    "filter": "फ़िल्टर",
+    "send": "भेजें",
+    "upload": "अपलोड करें",
+    "remove": "हटाएं",
+    "viewAll": "सभी देखें",
+    "getStarted": "शुरू करें",
+    "logout": "लॉग आउट",
+    "or": "या"
+  },
+  "language": {
+    "selectTitle": "अपनी भाषा चुनें",
+    "selectSubtitle": "आप इसे बाद में सेटिंग्स में बदल सकते हैं",
+    "changeTitle": "भाषा बदलें",
+    "changed": "भाषा बदलकर {{lang}} हो गई"
+  },
+  "auth": {
+    "welcomeBack": "वापसी पर स्वागत है!",
+    "loginTitle": "GigWork में लॉगिन करें",
+    "signupTitle": "अकाउंट बनाएं",
+    "phoneLabel": "फोन नंबर",
+    "phonePlaceholder": "10 अंकों का नंबर डालें",
+    "passwordLabel": "पासवर्ड",
+    "passwordPlaceholder": "अपना पासवर्ड डालें",
+    "newPasswordLabel": "पासवर्ड बनाएं",
+    "newPasswordPlaceholder": "कम से कम 8 अक्षर",
+    "confirmPasswordLabel": "पासवर्ड की पुष्टि करें",
+    "confirmPasswordPlaceholder": "पासवर्ड दोबारा डालें",
+    "sendOtp": "OTP भेजें",
+    "verifyOtp": "OTP सत्यापित करें",
+    "loginWithPassword": "पासवर्ड से लॉगिन",
+    "loginWithOtp": "OTP से लॉगिन",
+    "forgotPassword": "पासवर्ड भूल गए?",
+    "resetViaOtp": "OTP से रीसेट करें",
+    "otpSentTo": "+91 {{phone}} पर OTP भेजा गया",
+    "otpExpiry": "OTP {{seconds}} सेकंड में समाप्त",
+    "resendOtp": "OTP दोबारा भेजें",
+    "firstTimeOtp": "पहली बार? OTP से सत्यापित करें",
+    "passwordStrength": {
+      "weak": "कमज़ोर",
+      "medium": "ठीक",
+      "strong": "मज़बूत"
+    },
+    "errors": {
+      "invalidPhone": "सही 10 अंकों का नंबर डालें",
+      "invalidOtp": "गलत OTP। दोबारा कोशिश करें।",
+      "wrongPassword": "गलत पासवर्ड",
+      "passwordMismatch": "पासवर्ड मेल नहीं खाते",
+      "passwordTooShort": "पासवर्ड कम से कम 8 अक्षर का होना चाहिए",
+      "tooManyAttempts": "बहुत अधिक प्रयास। {{minutes}} मिनट बाद कोशिश करें।"
+    }
+  },
+  "onboarding": {
+    "slide1Title": "पास में काम खोजें",
+    "slide1Subtitle": "अपने कौशल के अनुसार स्थानीय गिग नौकरियाँ ब्राउज़ करें",
+    "slide2Title": "तुरंत भुगतान पाएं",
+    "slide2Subtitle": "GigWork वॉलेट में सुरक्षित भुगतान सीधे",
+    "slide3Title": "सत्यापित और विश्वसनीय",
+    "slide3Subtitle": "आधार-सत्यापित कार्यकर्ता और KYC-जाँचे ग्राहक"
+  },
+  "roles": {
+    "partnerTitle": "पार्टनर",
+    "partnerSubtitle": "मुझे काम चाहिए",
+    "clientTitle": "क्लाइंट",
+    "clientSubtitle": "मुझे कर्मचारी चाहिए",
+    "continueAs": "{{role}} के रूप में जारी रखें"
+  },
+  "dashboard": {
+    "greeting": "नमस्ते, {{name}}! 👋",
+    "online": "ऑनलाइन",
+    "offline": "ऑफलाइन",
+    "nearbyJobs": "पास की नौकरियाँ",
+    "noJobsFound": "अभी कोई पास की नौकरी नहीं",
+    "pullRefresh": "रिफ्रेश करने के लिए खींचें",
+    "wallet": "वॉलेट बैलेंस",
+    "todayEarnings": "आज",
+    "weekEarnings": "इस सप्ताह"
+  },
+  "jobs": {
+    "title": "मेरी नौकरियाँ",
+    "active": "सक्रिय",
+    "completed": "पूर्ण",
+    "cancelled": "रद्द",
+    "posted": "पोस्ट किया",
+    "noActiveJobs": "कोई सक्रिय नौकरी नहीं",
+    "noCompletedJobs": "कोई पूर्ण नौकरी नहीं",
+    "postJob": "नौकरी पोस्ट करें",
+    "accept": "नौकरी स्वीकार करें",
+    "reject": "नौकरी अस्वीकार करें",
+    "markComplete": "पूर्ण के रूप में चिह्नित करें",
+    "category": "श्रेणी",
+    "description": "विवरण",
+    "location": "स्थान",
+    "rate": "दर",
+    "daily": "प्रतिदिन",
+    "hourly": "प्रति घंटा",
+    "distance": "{{dist}} किमी दूर"
+  },
+  "wallet": {
+    "title": "वॉलेट",
+    "balance": "उपलब्ध बैलेंस",
+    "withdraw": "निकालें",
+    "addBank": "बैंक खाता जोड़ें",
+    "transactions": "लेन-देन"
+  },
+  "profile": {
+    "title": "प्रोफ़ाइल",
+    "editProfile": "प्रोफ़ाइल संपादित करें",
+    "skills": "मेरे कौशल",
+    "certificates": "प्रमाणपत्र",
+    "rating": "रेटिंग",
+    "totalJobs": "कुल नौकरियाँ",
+    "language": "भाषा",
+    "logout": "लॉग आउट",
+    "changePassword": "पासवर्ड बदलें"
+  },
+  "skills": {
+    "Mason": "राजमिस्त्री",
+    "Plumber": "प्लम्बर",
+    "Electrician": "इलेक्ट्रीशियन",
+    "Carpenter": "बढ़ई",
+    "Cleaner": "सफाईकर्मी",
+    "Painter": "पेंटर",
+    "Gardener": "माली",
+    "Driver": "चालक"
+  },
+  "settings": {
+    "language": "भाषा",
+    "version": "संस्करण {{version}}"
+  },
+  "payment": {
+    "title": "भुगतान",
+    "processing": "भुगतान प्रक्रिया जारी है...",
+    "doNotClose": "कृपया बंद न करें या वापस न जाएं",
+    "success": "भुगतान सफल! 🎉",
+    "failed": "भुगतान विफल"
+  },
+  "errors": {
+    "networkError": "इंटरनेट कनेक्शन नहीं है",
+    "serverError": "सर्वर त्रुटि। कृपया पुनः प्रयास करें।",
+    "sessionExpired": "सत्र समाप्त हो गया। कृपया फिर से लॉगिन करें।"
+  }
+}
