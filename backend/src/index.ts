@@ -12,6 +12,8 @@ import paymentRoutes from './routes/payments';
 import feedbackRoutes from './routes/feedback';
 import aadhaarRoutes from './routes/aadhaar';
 import disputeRoutes from './routes/disputes';
+import clientRoutes from './routes/client';
+import addressRoutes from './routes/addresses';
 import { initSocket, setIO } from './socket';
 
 dotenv.config({ path: '.env.local' });
@@ -44,6 +46,8 @@ app.use('/payments', paymentRoutes);
 app.use('/feedback', feedbackRoutes);
 app.use('/aadhaar', aadhaarRoutes);
 app.use('/disputes', disputeRoutes);
+app.use('/client', clientRoutes);
+app.use('/addresses', addressRoutes);
 
 const PORT = process.env.PORT || 4000;
 

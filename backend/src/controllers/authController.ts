@@ -192,7 +192,7 @@ export const register = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    const { name, email, avatarUrl } = req.body;
+    const { name, email, avatarUrl, gender } = req.body;
     const phone = decoded.phone || (await prisma.user.findUnique({ where: { id: decoded.id } }))?.phone;
 
     if (!phone) return res.status(400).json({ error: 'Phone not found in token' });
@@ -201,16 +201,16 @@ export const register = async (req: Request, res: Response) => {
     if (user) {
       user = await prisma.user.update({
         where: { phone },
-        data: { name, email, avatarUrl, isVerified: true },
+        data: { name, email, avatarUrl, isVerified: true, gender },
         include: { partner: true }
       });
     } else {
       user = await prisma.user.create({
-        data: { phone, name, email, avatarUrl, role: decoded.role || 'CLIENT', isVerified: true },
+        data: { phone, name, email, avatarUrl, role: decoded.role || 'CLIENT', isVerified: true, gender },
         include: { partner: true }
       });
       if (user.role === 'PARTNER') {
-        const partner = await prisma.partner.create({ data: { userId: user.id } });
+        const partner = await prisma.partner.create({ data: { userId: user.id, gender } });
         user.partner = partner;
       }
     }

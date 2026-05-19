@@ -16,7 +16,10 @@ export const getNearbyJobs = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     const jobs = await prisma.job.findMany({
-      where: { status: 'POSTED' },
+      where: { 
+        status: 'POSTED',
+        ...(partner.gender !== 'FEMALE' ? { femaleOnly: false } : {})
+      },
       include: { client: { select: { name: true, avatarUrl: true } } }
     });
 
@@ -41,15 +44,28 @@ export const acceptJob = async (req: AuthRequest, res: Response): Promise<void> 
     const updatedJob = await prisma.$transaction(async (tx) => {
       const job = await tx.job.findFirst({ where: { id: jobId, status: 'POSTED' } });
       if (!job) return null;
+      if (job.partnerIds.includes(partnerId)) return 'ALREADY_JOINED';
+      
+      const newAcceptedCount = job.acceptedCount + 1;
+      const isFilled = newAcceptedCount >= job.workerCount;
+
       return tx.job.update({
         where: { id: jobId },
-        data: { status: 'ACCEPTED', partnerId },
+        data: { 
+          acceptedCount: newAcceptedCount,
+          partnerIds: { push: partnerId },
+          status: isFilled ? 'ACCEPTED' : 'POSTED'
+        },
         include: { client: true },
       });
     });
 
     if (!updatedJob) {
-      res.status(409).json({ error: 'Job already accepted by another partner' });
+      res.status(409).json({ error: 'Job is no longer available' });
+      return;
+    }
+    if (updatedJob === 'ALREADY_JOINED') {
+      res.status(409).json({ error: 'You have already joined this job' });
       return;
     }
 
@@ -60,9 +76,14 @@ export const acceptJob = async (req: AuthRequest, res: Response): Promise<void> 
 
     const { getIO } = await import('../socket');
     const io = getIO();
+    const isFilled = (updatedJob as any).status === 'ACCEPTED';
+
     if (io && partner) {
-      io.to(`user:${updatedJob.clientId}`).emit('job:accepted', {
+      io.to(`user:${(updatedJob as any).clientId}`).emit('job:worker:joined', {
         jobId,
+        acceptedCount: (updatedJob as any).acceptedCount,
+        totalNeeded: (updatedJob as any).workerCount,
+        isFilled,
         partner: {
           id: partner.id,
           name: partner.user.name,
@@ -71,13 +92,32 @@ export const acceptJob = async (req: AuthRequest, res: Response): Promise<void> 
           rating: partner.rating,
         },
       });
+
+      if (isFilled) {
+        io.to(`user:${(updatedJob as any).clientId}`).emit('job:accepted', {
+          jobId,
+          workerCount: (updatedJob as any).workerCount,
+          message: 'All workers confirmed!',
+          partner: {
+            id: partner.id,
+            name: partner.user.name,
+            avatar: partner.user.avatarUrl,
+            phone: partner.user.phone,
+            rating: partner.rating,
+          },
+        });
+      }
     }
 
     // Try to import sendPushNotification, ignore if it doesn't exist
     try {
       const { sendPushNotification } = await import('../services/pushService');
       if (partner) {
-        await sendPushNotification(updatedJob.clientId, 'JOB_ACCEPTED', { partnerName: partner.user.name });
+        if (isFilled) {
+          await sendPushNotification((updatedJob as any).clientId, 'JOB_FILLED', { category: (updatedJob as any).category });
+        } else {
+          await sendPushNotification((updatedJob as any).clientId, 'WORKER_JOINED', { count: (updatedJob as any).acceptedCount, total: (updatedJob as any).workerCount });
+        }
       }
     } catch (e) {}
 
@@ -151,7 +191,7 @@ export const createJob = async (req: AuthRequest, res: Response): Promise<void> 
     const clientId = req.user?.id;
     if (!clientId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
-    const { category, description, address, scheduledDate, workers, rateType, rate, lat, lng } = req.body;
+    const { category, description, address, scheduledDate, workers, rateType, rate, lat, lng, femaleOnly, seasonLabel, materialsIncluded, materialCost } = req.body;
 
     const newJob = await prisma.job.create({
       data: {
@@ -165,6 +205,10 @@ export const createJob = async (req: AuthRequest, res: Response): Promise<void> 
         rate: rate || (rateType === 'DAILY' ? 1200 : 200),
         scheduledDate: new Date(scheduledDate),
         workerCount: parseInt(workers) || 1,
+        femaleOnly: femaleOnly === true,
+        seasonLabel,
+        materialsIncluded: materialsIncluded === true,
+        materialCost: parseFloat(materialCost) || null,
         status: 'POSTED'
       },
       include: { client: { select: { name: true, avatarUrl: true, phone: true } } },
@@ -175,12 +219,15 @@ export const createJob = async (req: AuthRequest, res: Response): Promise<void> 
 
     if (nearbyPartnerIds.length > 0) {
       const partnerIds = nearbyPartnerIds.map(p => p.partnerId);
+      const whereClause: any = {
+        id: { in: partnerIds },
+        skills: { has: category },
+        isOnline: true,
+      };
+      if (femaleOnly) whereClause.gender = 'FEMALE';
+
       const matchedPartners = await prisma.partner.findMany({
-        where: {
-          id: { in: partnerIds },
-          skills: { has: category },
-          isOnline: true,
-        },
+        where: whereClause,
         include: { user: true },
       });
 

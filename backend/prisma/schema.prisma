@@ -24,12 +24,14 @@ model User {
   loginMethod   LoginMethod @default(OTP)
   failedAttempts Int        @default(0)
   lockedUntil   DateTime?
+  gender        String?
 
   partner       Partner?
   clientJobs    Job[]     @relation("ClientJobs")
   messages      Message[]
   disputes      Dispute[]
   notifications Notification[]
+  savedAddresses SavedAddress[]
 }
 
 enum LoginMethod {
@@ -42,6 +44,7 @@ model Partner {
   id            String        @id @default(auto()) @map("_id") @db.ObjectId
   userId        String        @unique @db.ObjectId
   user          User          @relation(fields:[userId], references:[id])
+  gender        String?
   skills        String[]
   certificates  Certificate[]
   walletBalance Float         @default(0)
@@ -70,6 +73,12 @@ model Job {
   status           JobStatus @default(POSTED)
   scheduledDate    DateTime
   workerCount      Int       @default(1)
+  femaleOnly       Boolean   @default(false)
+  seasonLabel      String?
+  materialsIncluded Boolean  @default(false)
+  materialCost     Float?
+  acceptedCount    Int       @default(0)
+  partnerIds       String[]
   completionPhotos String[]
   completionNotes  String?
   createdAt        DateTime  @default(now())
@@ -126,6 +135,28 @@ model BankAccount {
   holderName    String
   isDefault     Boolean  @default(false)
   createdAt     DateTime @default(now())
+}
+
+model SavedAddress {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  user        User     @relation(fields:[userId], references:[id])
+  label       String   // 'Home' | 'Work' | 'Other'
+  customLabel String?  // used when label = 'Other'
+  name        String   // contact name at this address
+  phone       String   // contact phone at this address
+  flat        String   // flat / house / building number
+  street      String   // street / locality / area
+  landmark    String?  // optional landmark
+  city        String
+  state       String
+  pincode     String
+  lat         Float
+  lng         Float
+  fullAddress String   // formatted single-line address
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Message {
