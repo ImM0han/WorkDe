@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../src/stores/authStore';
+import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 
 export default function OTPVerifyScreen() {
   const { sessionInfo, phone, mode } = useLocalSearchParams<{ sessionInfo: string, phone: string, mode?: string }>();
@@ -80,7 +81,7 @@ export default function OTPVerifyScreen() {
         else router.replace('/(client)/');
       }
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: err.message });
+      Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
     } finally {
       setLoading(false);
     }

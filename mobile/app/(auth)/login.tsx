@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
+import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
@@ -33,7 +34,7 @@ export default function LoginScreen() {
       if (data.user.role === 'PARTNER') router.replace('/(partner)/');
       else router.replace('/(client)/');
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: err.message });
+      Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ export default function LoginScreen() {
         params: { sessionInfo: data.sessionInfo, phone: `+91${phone}`, mode: 'forgot' }
       });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: err.message });
+      Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
     } finally {
       setLoading(false);
     }

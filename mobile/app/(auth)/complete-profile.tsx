@@ -6,6 +6,7 @@ import Toast from 'react-native-toast-message';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { useAuthStore } from '../../src/stores/authStore';
+import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 
 export default function CompleteProfileScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
@@ -55,7 +56,7 @@ export default function CompleteProfileScreen() {
       else router.replace('/(client)/');
 
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: err.message });
+      Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
     } finally {
       setLoading(false);
     }

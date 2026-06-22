@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
+import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 
 export default function RegisterStartScreen() {
   const [phone, setPhone] = useState('');
@@ -52,7 +53,7 @@ export default function RegisterStartScreen() {
         params: { sessionInfo: data.sessionInfo, phone: `+91${phone}`, mode: 'register' }
       });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: err.message });
+      Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
     } finally {
       setLoading(false);
     }

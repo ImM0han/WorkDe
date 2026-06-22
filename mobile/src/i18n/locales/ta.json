@@ -271,7 +271,14 @@
     "successTitle": "Job Posted! 🎉",
     "successMsg": "Matching you with nearby workers...",
     "matchedTitle": "Worker Matched!",
-    "matchedMsg": "{{name}} accepted your job"
+    "matchedMsg": "{{name}} accepted your job",
+    "postJobTitle": "Post a Job",
+    "step1Text": "Step 1 of 2",
+    "addPhotoLabel": "Add Photo of Work",
+    "uploadText": "Tap to add a photo (Optional)",
+    "femaleOnlyLabel": "Female workers only",
+    "seasonLabel": "Season",
+    "materialsLabel": "Materials included"
   },
   "dailyOps": {
     "title": "Daily Operations",
@@ -318,6 +325,21 @@
     "Cleaner": "Cleaner",
     "Painter": "Painter",
     "Gardener": "Gardener",
-    "Driver": "Driver"
+    "Driver": "Driver",
+    "Loading": "Loading/Unloading",
+    "Farming": "Farming",
+    "Cook": "Cook",
+    "Babysitter": "Babysitter",
+    "Beautician": "Beautician",
+    "EventSetup": "Event Setup",
+    "Waiter": "Waiter"
+  },
+  "clientHome": {
+    "findProfessional": "வல்லுநரைத் தேடுங்கள்",
+    "searchPlaceholder": "திறன்கள், பெயர்களைத் தேடுங்கள்...",
+    "categories": "வகைகள்",
+    "all": "அனைத்தும்",
+    "nearbyProfessionals": "அருகிலுள்ள வல்லுநர்கள்",
+    "noProfessionals": "உங்கள் தேடலுக்குரிய வல்லுநர்கள் யாரும் காணப்படவில்லை."
   }
 }

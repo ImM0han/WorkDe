@@ -7,6 +7,7 @@ import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../src/stores/authStore';
 import { colors, typography, spacing, radius } from '../../src/theme/tokens';
 import { Feather } from '@expo/vector-icons';
+import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 
 const checkStrength = (pass: string) => {
   let score = 0;
@@ -65,7 +66,7 @@ export default function SetPasswordScreen() {
         else router.replace('/(client)');
       }
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: err.message });
+      Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
     } finally {
       setLoading(false);
     }

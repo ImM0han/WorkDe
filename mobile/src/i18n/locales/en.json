@@ -301,7 +301,14 @@
     "successTitle": "Job Posted! 🎉",
     "successMsg": "Matching you with nearby workers...",
     "matchedTitle": "Worker Matched!",
-    "matchedMsg": "{{name}} accepted your job"
+    "matchedMsg": "{{name}} accepted your job",
+    "postJobTitle": "Post a Job",
+    "step1Text": "Step 1 of 2",
+    "addPhotoLabel": "Add Photo of Work",
+    "uploadText": "Tap to add a photo (Optional)",
+    "femaleOnlyLabel": "Female workers only",
+    "seasonLabel": "Season",
+    "materialsLabel": "Materials included"
   },
   "dailyOps": {
     "title": "Daily Operations",
@@ -348,6 +355,21 @@
     "Cleaner": "Cleaner",
     "Painter": "Painter",
     "Gardener": "Gardener",
-    "Driver": "Driver"
+    "Driver": "Driver",
+    "Loading": "Loading/Unloading",
+    "Farming": "Farming",
+    "Cook": "Cook",
+    "Babysitter": "Babysitter",
+    "Beautician": "Beautician",
+    "EventSetup": "Event Setup",
+    "Waiter": "Waiter"
+  },
+  "clientHome": {
+    "findProfessional": "Find a Professional",
+    "searchPlaceholder": "Search for skills, names...",
+    "categories": "Categories",
+    "all": "All",
+    "nearbyProfessionals": "Nearby Professionals",
+    "noProfessionals": "No professionals found matching your criteria."
   }
 }

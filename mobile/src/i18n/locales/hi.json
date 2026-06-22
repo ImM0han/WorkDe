@@ -143,7 +143,14 @@
     "Cleaner": "सफाईकर्मी",
     "Painter": "पेंटर",
     "Gardener": "माली",
-    "Driver": "चालक"
+    "Driver": "चालक",
+    "Loading": "सामान लादना/उतारना",
+    "Farming": "खेती",
+    "Cook": "रसोइया",
+    "Babysitter": "बेबीसिटर",
+    "Beautician": "ब्यूटीशियन",
+    "EventSetup": "इवेंट सेटअप",
+    "Waiter": "वेटर"
   },
   "settings": {
     "language": "भाषा",
@@ -160,5 +167,39 @@
     "networkError": "इंटरनेट कनेक्शन नहीं है",
     "serverError": "सर्वर त्रुटि। कृपया पुनः प्रयास करें।",
     "sessionExpired": "सत्र समाप्त हो गया। कृपया फिर से लॉगिन करें।"
+  },
+  "clientHome": {
+    "findProfessional": "प्रोफेशनल खोजें",
+    "searchPlaceholder": "कौशल, नाम खोजें...",
+    "categories": "श्रेणियाँ",
+    "all": "सभी",
+    "nearbyProfessionals": "आस-पास के प्रोफेशनल",
+    "noProfessionals": "आपकी खोज के अनुसार कोई प्रोफेशनल नहीं मिला।"
+  },
+  "postJob": {
+    "step1Title": "काम का विवरण",
+    "step2Title": "समीक्षा और पोस्ट",
+    "postJobTitle": "नौकरी पोस्ट करें",
+    "step1Text": "चरण 1 ऑफ़ 2",
+    "categoryLabel": "श्रेणी चुनें",
+    "descriptionLabel": "काम का विवरण",
+    "descriptionPlaceholder": "काम का विस्तार से वर्णन करें...",
+    "addPhotoLabel": "काम की फोटो जोड़ें",
+    "uploadText": "फोटो जोड़ने के लिए टैप करें (वैकल्पिक)",
+    "dateLabel": "निर्धारित तिथि",
+    "workersLabel": "श्रमिकों की संख्या",
+    "femaleOnlyLabel": "केवल महिला श्रमिक",
+    "seasonLabel": "मौसम",
+    "materialsLabel": "सामग्री शामिल है",
+    "locationLabel": "काम का स्थान",
+    "locationPlaceholder": "नक्शे पर टैप करें या पता डालें",
+    "rateTypeLabel": "दर का प्रकार",
+    "rateLabel": "दर (₹)",
+    "reviewTitle": "नौकरी की समीक्षा करें",
+    "postButton": "नौकरी पोस्ट करें →",
+    "successTitle": "नौकरी पोस्ट हो गई! 🎉",
+    "successMsg": "आपको पास के श्रमिकों से मिलाया जा रहा है...",
+    "matchedTitle": "श्रमिक मिल गया!",
+    "matchedMsg": "{{name}} ने आपका काम स्वीकार कर लिया है"
   }
 }

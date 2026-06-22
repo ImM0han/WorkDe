@@ -55,7 +55,7 @@ export default function ClientProfileScreen() {
 
         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(client)/(modals)/saved-addresses')}>
           <View>
-            <Text style={styles.menuText}>📍 {t('profile.savedAddresses') || 'Saved Addresses'}</Text>
+            <Text style={styles.menuText}> {t('profile.savedAddresses') || 'Saved Addresses'}</Text>
             <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#6B5C4E', marginTop: 2 }}>
               {addressCount} {t('profile.saved') || 'saved'}
             </Text>

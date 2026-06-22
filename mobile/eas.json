@@ -11,13 +11,21 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://pleasing-serenity-nodeenvdevelopment.up.railway.app",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_xxxxxx"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
       },
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://pleasing-serenity-nodeenvdevelopment.up.railway.app",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_xxxxxx"
+      }
     }
   }
 }

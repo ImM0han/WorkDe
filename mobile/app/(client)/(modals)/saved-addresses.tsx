@@ -94,7 +94,7 @@ export default function SavedAddresses() {
 
         {!isLoading && addresses.length === 0 && (
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📍</Text>
+            {/* <Text style={styles.emptyIcon}>📍</Text> */}
             <Text style={styles.emptyTitle}>No saved addresses yet</Text>
             <Text style={styles.emptySub}>
               Add an address to use it quickly when posting jobs
