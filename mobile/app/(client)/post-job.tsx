@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Switch, Image, Modal, ActivityIndicator, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { 
   colors, typography, spacing, radius, categoryIcons, shadow,
   groupJobCategories, femaleOnlyCategories, seasonalCategories, 
@@ -31,6 +32,18 @@ export default function PostJob() {
   const [rateType, setRateType] = useState<'DAILY' | 'HOURLY'>('DAILY');
   const [rate, setRate] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
 
   const [femaleOnly, setFemaleOnly] = useState(false);
   const [seasonLabel, setSeasonLabel] = useState('Year-round');
@@ -89,7 +102,8 @@ export default function PostJob() {
         rate,
         imageUri: imageUri || '',
         lat: jobLocation.lat.toString(),
-        lng: jobLocation.lng.toString()
+        lng: jobLocation.lng.toString(),
+        address: jobLocation.address
       }
     });
   };
@@ -136,7 +150,7 @@ export default function PostJob() {
 
         {/* Photo Upload */}
         <Text style={styles.label}>{t('postJob.addPhotoLabel') || 'Add Photo of Work'}</Text>
-        <TouchableOpacity style={styles.uploadButton} onPress={() => setImageUri('https://via.placeholder.com/300')}>
+        <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={styles.uploadedImage} />
           ) : (

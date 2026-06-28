@@ -1,22 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, radius, shadow } from '../../src/theme/tokens';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import api from '../../src/services/apiClient';
 
 const fetchClientJobs = async () => {
-  // Mock data
-  return [
-    { 
-      id: 'j1', category: 'Electrician', status: 'IN_PROGRESS', rate: 1200, date: new Date().toISOString(),
-      extensionRequest: { requestedBy: 'PARTNER', amount: '2', status: 'PENDING' }
-    },
-    { id: 'j2', category: 'Plumber', status: 'COMPLETED', rate: 800, date: new Date().toISOString() },
-    { id: 'j3', category: 'Carpenter', status: 'CANCELLED', rate: 1500, date: new Date().toISOString() },
-  ];
+  const res = await api.get('/jobs/client');
+  return res.data;
 };
 
 export default function ClientJobs() {
@@ -25,11 +19,16 @@ export default function ClientJobs() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const { data: jobs, isLoading } = useQuery({
+  const { data: jobs, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['clientJobs'],
     queryFn: fetchClientJobs,
-    staleTime: Infinity,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   const handleAcceptExtension = (jobId: string) => {
     queryClient.setQueryData(['clientJobs'], (oldData: any[] | undefined) => {
@@ -63,8 +62,8 @@ export default function ClientJobs() {
 
   const getFilteredJobs = () => {
     if (!jobs) return [];
-    if (activeTab === 'Active') return jobs.filter(j => ['POSTED', 'ACCEPTED', 'IN_PROGRESS', 'EXTENDED'].includes(j.status));
-    return jobs.filter(j => j.status === activeTab.toUpperCase());
+    if (activeTab === 'Active') return jobs.filter((j: any) => ['POSTED', 'ACCEPTED', 'IN_PROGRESS', 'EXTENDED'].includes(j.status));
+    return jobs.filter((j: any) => j.status === activeTab.toUpperCase());
   };
 
   const renderJobCard = ({ item }: { item: any }) => (
@@ -77,6 +76,11 @@ export default function ClientJobs() {
             router.push('/(client)/(modals)/daily-ops');
           } else if (item.status === 'COMPLETED') {
             router.push('/(client)/(modals)/payment');
+          } else if (['POSTED', 'ACCEPTED'].includes(item.status)) {
+            router.push({
+              pathname: '/(client)/(modals)/job-detail',
+              params: { id: item.id }
+            });
           }
         }}
       >
@@ -93,7 +97,7 @@ export default function ClientJobs() {
           </Text>
         </View>
         <View style={styles.cardBody}>
-          <Text style={styles.dateText}>{new Date(item.date).toLocaleDateString()}</Text>
+          <Text style={styles.dateText}>{new Date(item.scheduledDate || item.createdAt).toLocaleDateString()}</Text>
           <Text style={styles.priceText}>₹{item.rate}</Text>
         </View>
       </TouchableOpacity>
@@ -150,6 +154,8 @@ export default function ClientJobs() {
           renderItem={renderJobCard}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
+          refreshing={isRefetching}
+          onRefresh={refetch}
           ListEmptyComponent={<Text style={styles.emptyText}>{t(`jobs.no${activeTab}Jobs`) || `No ${activeTab.toLowerCase()} jobs found.`}</Text>}
         />
       )}

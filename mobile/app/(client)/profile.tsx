@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../src/services/apiClient';
@@ -14,6 +14,20 @@ export default function ClientProfileScreen() {
   const { user, logout } = useAuthStore();
   const { t } = useTranslation();
   const { currentLang } = useLanguageStore();
+
+  useFocusEffect(
+    useCallback(() => {
+      api.get('/auth/me')
+        .then(res => {
+          if (res.data?.user) {
+            useAuthStore.setState({ user: res.data.user });
+          }
+        })
+        .catch(err => {
+          console.warn('[Profile] Failed to fetch current user:', err);
+        });
+    }, [])
+  );
 
   const { data: addresses = [] } = useQuery({
     queryKey: ['savedAddresses'],

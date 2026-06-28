@@ -4,11 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, radius, shadow } from '../../../src/theme/tokens';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import api from '../../../src/services/apiClient';
+import Toast from 'react-native-toast-message';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function JobReviewConfirm() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [isPosting, setIsPosting] = useState(false);
+  const queryClient = useQueryClient();
 
   const workers = parseInt(params.workers as string) || 1;
   const rateType = params.rateType as string || 'DAILY';
@@ -18,13 +22,40 @@ export default function JobReviewConfirm() {
   const handlePost = async () => {
     setIsPosting(true);
     try {
-      // Mock API call: await axios.post('/jobs', { ...params });
-      setTimeout(() => {
-        setIsPosting(false);
-        router.replace('/(client)/(modals)/job-posted-success');
-      }, 1000);
-    } catch (e) {
+      const res = await api.post('/jobs', {
+        category: params.category,
+        description: params.description,
+        scheduledDate: params.date,
+        workers: parseInt(params.workers as string, 10) || 1,
+        femaleOnly: params.femaleOnly === 'true',
+        seasonLabel: params.seasonLabel,
+        materialsIncluded: params.materialsIncluded === 'true',
+        materialCost: params.materialCost ? parseFloat(params.materialCost as string) : null,
+        rateType: params.rateType,
+        rate: parseFloat(params.rate as string) || 0,
+        lat: parseFloat(params.lat as string),
+        lng: parseFloat(params.lng as string),
+        address: params.address,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
       setIsPosting(false);
+
+      router.replace({
+        pathname: '/(client)/(modals)/job-posted-success',
+        params: {
+          jobId: res.data.id,
+          workerCount: res.data.workerCount?.toString() || '1'
+        }
+      });
+    } catch (e: any) {
+      setIsPosting(false);
+      const errorMsg = e.response?.data?.error || e.message || 'Failed to post job';
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMsg
+      });
     }
   };
 

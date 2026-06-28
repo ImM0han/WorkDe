@@ -214,3 +214,58 @@ export const getNearbyPartners = async (req: AuthRequest, res: Response): Promis
     res.status(500).json({ error: 'Failed to fetch nearby partners' });
   }
 };
+
+export const getPartnerReviews = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    let partnerId = id;
+    if (id === 'me') {
+      partnerId = req.user?.partnerId || '';
+    }
+
+    if (!partnerId) {
+      res.status(400).json({ error: 'Partner ID is required' });
+      return;
+    }
+
+    const reviews = await prisma.feedback.findMany({
+      where: {
+        job: {
+          partnerId: partnerId
+        }
+      },
+      include: {
+        job: {
+          select: {
+            category: true,
+            client: {
+              select: {
+                name: true,
+                avatarUrl: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const formattedReviews = reviews.map(r => ({
+      id: r.id,
+      name: r.job.client.name,
+      avatarUrl: r.job.client.avatarUrl,
+      rating: r.rating,
+      comment: r.comment,
+      category: r.job.category,
+      createdAt: r.createdAt
+    }));
+
+    res.json(formattedReviews);
+  } catch (error) {
+    console.error('getPartnerReviews error:', error);
+    res.status(500).json({ error: 'Failed to fetch partner reviews' });
+  }
+};
+

@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '../../../src/stores/authStore';
+import api from '../../../src/services/apiClient';
 
 export default function ManageSkillsModal() {
   const { t } = useTranslation();
-  const [selectedSkills, setSelectedSkills] = useState<string[]>(['Electrician', 'Plumber']);
+  const { user } = useAuthStore();
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(user?.partner?.skills || []);
+  const [saving, setSaving] = useState(false);
 
   const availableSkills = [
     'Mason', 'Cleaner', 'Electrician', 'Carpenter', 'Plumber', 'Painter', 
@@ -27,11 +31,31 @@ export default function ManageSkillsModal() {
     }
   };
 
-  const handleSave = () => {
-    // Simulating API save to database
-    console.log('Saving skills to database:', selectedSkills);
-    Toast.show({ type: 'success', text1: 'Success', text2: 'Skills saved to database.' });
-    router.back();
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      const res = await api.put('/partner/skills', { skills: selectedSkills });
+      
+      // Update the user's local store details
+      if (user) {
+        const updatedUser = {
+          ...user,
+          partner: {
+            ...user.partner!,
+            skills: selectedSkills
+          }
+        };
+        useAuthStore.setState({ user: updatedUser });
+      }
+
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Skills updated successfully.' });
+      router.back();
+    } catch (e) {
+      console.error(e);
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to save skills. Please try again.' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const showDocumentNote = selectedSkills.includes('Electrician') || selectedSkills.includes('Driver');
@@ -70,13 +94,17 @@ export default function ManageSkillsModal() {
       <TouchableOpacity 
         style={styles.submitBtnWrapper} 
         onPress={handleSave}
-        disabled={selectedSkills.length === 0}
+        disabled={selectedSkills.length === 0 || saving}
       >
         <LinearGradient 
-          colors={selectedSkills.length === 0 ? ['#C4B5A5', '#C4B5A5'] : ['#FF6B1A', '#F59E0B']} 
+          colors={selectedSkills.length === 0 || saving ? ['#C4B5A5', '#C4B5A5'] : ['#FF6B1A', '#F59E0B']} 
           style={styles.submitBtn}
         >
-          <Text style={styles.submitText}>{t('common.save') || 'Save Skills'}</Text>
+          {saving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.submitText}>{t('common.save') || 'Save Skills'}</Text>
+          )}
         </LinearGradient>
       </TouchableOpacity>
     </View>

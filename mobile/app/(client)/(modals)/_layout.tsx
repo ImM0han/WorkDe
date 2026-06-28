@@ -8,6 +8,7 @@ export default function ClientModalsLayout() {
       <Stack.Screen name="reviews-detail" />
       <Stack.Screen name="job-review-confirm" />
       <Stack.Screen name="job-posted-success" />
+      <Stack.Screen name="job-detail" />
       <Stack.Screen name="partner-matched" />
       <Stack.Screen name="daily-ops" />
       <Stack.Screen name="worker-detail" />

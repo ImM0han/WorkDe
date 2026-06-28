@@ -105,6 +105,7 @@
     "posted": "Posted",
     "noActiveJobs": "No active jobs",
     "noCompletedJobs": "No completed jobs",
+    "noCancelledJobs": "No cancelled jobs",
     "postJob": "Post a Job",
     "jobDetail": "Job Details",
     "accept": "Accept Job",

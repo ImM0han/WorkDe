@@ -13,6 +13,14 @@ export interface User {
   isVerified: boolean;
   aadhaarStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
   partnerId?: string;
+  partner?: {
+    id: string;
+    gender?: string;
+    skills: string[];
+    walletBalance: number;
+    rating: number;
+    totalJobs: number;
+  };
 }
 
 interface AuthStore {

@@ -247,11 +247,32 @@ export const changePassword = async (req: any, res: Response) => {
 
 export const me = async (req: any, res: Response) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { partner: true }
+    });
     if (!user) return res.status(404).json({ error: 'User not found' });
     
     return res.status(200).json({ user });
   } catch (error) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const updateProfile = async (req: any, res: Response) => {
+  try {
+    const { name, email, avatarUrl, gender } = req.body;
+    const userId = req.user.id;
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { name, email, avatarUrl, gender },
+      include: { partner: true }
+    });
+
+    return res.status(200).json({ user });
+  } catch (error) {
+    console.error('Update profile error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };

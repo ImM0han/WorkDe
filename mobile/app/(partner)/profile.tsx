@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../src/services/apiClient';
@@ -13,6 +13,20 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const { t } = useTranslation();
   const { currentLang } = useLanguageStore();
+
+  useFocusEffect(
+    useCallback(() => {
+      api.get('/auth/me')
+        .then(res => {
+          if (res.data?.user) {
+            useAuthStore.setState({ user: res.data.user });
+          }
+        })
+        .catch(err => {
+          console.warn('[Profile] Failed to fetch current user:', err);
+        });
+    }, [])
+  );
 
   const handleLogout = async () => {
     await logout();
@@ -32,15 +46,15 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.statsRow}>
           <TouchableOpacity style={styles.statCard} activeOpacity={0.7} onPress={() => router.push('/(partner)/(modals)/reviews')}>
-            <Text style={styles.statValue}>{user?.rating?.toFixed(1) || '0'}</Text>
+            <Text style={styles.statValue}>{user?.partner?.rating?.toFixed(1) || '0'}</Text>
             <Text style={styles.statLabel}>{t('profile.rating') || 'Rating'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.statCard} activeOpacity={0.7} onPress={() => router.push('/(partner)/jobs')}>
-            <Text style={styles.statValue}>{user?.jobsDone || '0'}</Text>
+            <Text style={styles.statValue}>{user?.partner?.totalJobs || '0'}</Text>
             <Text style={styles.statLabel}>{t('profile.jobsDone') || 'Jobs Done'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.statCard} activeOpacity={0.7} onPress={() => router.push('/(partner)/(modals)/manage-skills')}>
-            <Text style={styles.statValue}>{user?.skills?.length || '0'}</Text>
+            <Text style={styles.statValue}>{user?.partner?.skills?.length || '0'}</Text>
             <Text style={styles.statLabel}>{t('profile.skillsCount') || 'Skills'}</Text>
           </TouchableOpacity>
         </View>

@@ -341,3 +341,60 @@ export const getJobById = async (req: AuthRequest, res: Response): Promise<void>
     res.status(500).json({ error: 'Failed to fetch job' });
   }
 };
+
+export const getPartnerJobs = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const partnerId = req.user?.partnerId;
+    if (!partnerId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+    const jobs = await prisma.job.findMany({
+      where: { partnerId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        client: { select: { name: true, avatarUrl: true, phone: true } },
+        payment: true,
+        feedback: true
+      }
+    });
+
+    res.json(jobs);
+  } catch (error) {
+    console.error('getPartnerJobs error:', error);
+    res.status(500).json({ error: 'Failed to fetch partner jobs' });
+  }
+};
+
+export const updateJob = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const clientId = req.user?.id;
+    const { description, workers, rate, scheduledDate } = req.body;
+
+    const job = await prisma.job.findUnique({ where: { id } });
+    if (!job || job.clientId !== clientId) {
+      res.status(403).json({ error: 'Not authorized' });
+      return;
+    }
+
+    if (!['POSTED', 'ACCEPTED'].includes(job.status)) {
+      res.status(400).json({ error: 'Job cannot be edited once active/in progress' });
+      return;
+    }
+
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: {
+        description: description !== undefined ? description : job.description,
+        workerCount: workers !== undefined ? parseInt(workers, 10) : job.workerCount,
+        rate: rate !== undefined ? parseFloat(rate) : job.rate,
+        scheduledDate: scheduledDate !== undefined ? new Date(scheduledDate) : job.scheduledDate,
+      }
+    });
+
+    res.json(updatedJob);
+  } catch (error) {
+    console.error('updateJob error:', error);
+    res.status(500).json({ error: 'Failed to update job' });
+  }
+};
+

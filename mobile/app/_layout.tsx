@@ -13,6 +13,8 @@ import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { initI18n } from '../src/i18n';
 import '../src/i18n';
+import { useAuthStore } from '../src/stores/authStore';
+import { useLanguageStore } from '../src/i18n/languageStore';
 
 import { TiroDevanagariHindi_400Regular } from '@expo-google-fonts/tiro-devanagari-hindi';
 import { HindSiliguri_400Regular } from '@expo-google-fonts/hind-siliguri';
@@ -70,6 +72,32 @@ queryClient.setQueryDefaults(['userProfile'], { staleTime: 600_000 });
 
 export default function RootLayout() {
   useSocketSetup();
+  
+  const [authHydrated, setAuthHydrated] = useState(false);
+  const [langHydrated, setLangHydrated] = useState(false);
+
+  useEffect(() => {
+    // Check if auth store is hydrated
+    const unsubAuth = useAuthStore.persist.onFinishHydration(() => {
+      setAuthHydrated(true);
+    });
+    if (useAuthStore.persist.hasHydrated()) {
+      setAuthHydrated(true);
+    }
+
+    // Check if language store is hydrated
+    const unsubLang = useLanguageStore.persist.onFinishHydration(() => {
+      setLangHydrated(true);
+    });
+    if (useLanguageStore.persist.hasHydrated()) {
+      setLangHydrated(true);
+    }
+
+    return () => {
+      unsubAuth();
+      unsubLang();
+    };
+  }, []);
   
   const [fontsLoaded] = useFonts({
     'Syne-Regular':     require('../assets/fonts/Syne-Regular.ttf'),
@@ -135,10 +163,12 @@ export default function RootLayout() {
   }, [socket, queryClient, router]);
 
   useEffect(() => {
-    if (fontsLoaded && i18nReady) SplashScreen.hideAsync();
-  }, [fontsLoaded, i18nReady]);
+    if (fontsLoaded && i18nReady && authHydrated && langHydrated) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, i18nReady, authHydrated, langHydrated]);
 
-  if (!fontsLoaded || !i18nReady) return null;
+  if (!fontsLoaded || !i18nReady || !authHydrated || !langHydrated) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

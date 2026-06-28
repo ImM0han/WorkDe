@@ -1,19 +1,45 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
+import React, { useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQuery } from '@tanstack/react-query';
+import { useAuthStore } from '../../../src/stores/authStore';
+import api from '../../../src/services/apiClient';
 
 export default function CertStatusModal() {
-  const certs = [
-    { id: '1', skill: 'Electrician', name: 'Level 2 Wiring Certification', status: 'VERIFIED', date: 'Oct 20, 2023' },
-    { id: '2', skill: 'Plumber', name: 'Advanced Pipe Fitting', status: 'PENDING', date: 'Oct 22, 2023' },
-  ];
+  const { user } = useAuthStore();
+  const partnerIdToUse = user?.partnerId || (user as any)?.partner?.id;
+
+  const { data: partnerData, isLoading, refetch } = useQuery({
+    queryKey: ['partnerProfile', partnerIdToUse],
+    queryFn: () => api.get(`/partner/${partnerIdToUse}`).then(r => r.data),
+    enabled: !!partnerIdToUse
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (partnerIdToUse) {
+        refetch();
+      }
+    }, [partnerIdToUse, refetch])
+  );
+
+  const certs = partnerData?.certificates || [];
 
   const getStatusColor = (status: string) => {
     switch(status) {
       case 'VERIFIED': return '#22C55E';
       case 'REJECTED': return '#EF4444';
       default: return '#F59E0B';
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (e) {
+      return '';
     }
   };
 
@@ -31,20 +57,35 @@ export default function CertStatusModal() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {certs.map(cert => (
-          <View key={cert.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.skill}>{cert.skill}</Text>
-              <View style={[styles.statusBadge, { borderColor: getStatusColor(cert.status) }]}>
-                <Text style={[styles.statusText, { color: getStatusColor(cert.status) }]}>{cert.status}</Text>
+      {isLoading ? (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color="#FF6B1A" />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {certs.length > 0 ? (
+            certs.map((cert: any) => (
+              <View key={cert.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.skill}>{cert.skill}</Text>
+                  <View style={[styles.statusBadge, { borderColor: getStatusColor(cert.status) }]}>
+                    <Text style={[styles.statusText, { color: getStatusColor(cert.status) }]}>{cert.status}</Text>
+                  </View>
+                </View>
+                <Text style={styles.name}>{cert.name}</Text>
+                {cert.rejectionReason && cert.status === 'REJECTED' && (
+                  <Text style={styles.rejectionReason}>Reason: {cert.rejectionReason}</Text>
+                )}
+                <Text style={styles.date}>Submitted on {formatDate(cert.createdAt)}</Text>
               </View>
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No certificates submitted yet.</Text>
             </View>
-            <Text style={styles.name}>{cert.name}</Text>
-            <Text style={styles.date}>Submitted on {cert.date}</Text>
-          </View>
-        ))}
-      </ScrollView>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -63,5 +104,9 @@ const styles = StyleSheet.create({
   statusBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   statusText: { fontFamily: 'Nunito-Bold', fontSize: 10 },
   name: { fontFamily: 'Syne-Bold', fontSize: 16, color: '#1C1410', marginBottom: 8 },
-  date: { fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#C4B5A5' }
+  date: { fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#C4B5A5' },
+  rejectionReason: { fontFamily: 'Nunito-SemiBold', fontSize: 13, color: '#EF4444', marginBottom: 8 },
+  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 40 },
+  emptyText: { fontFamily: 'Nunito-SemiBold', fontSize: 14, color: '#C4B5A5', textAlign: 'center' }
 });

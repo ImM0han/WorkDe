@@ -87,3 +87,46 @@ export const addBankAccount = async (req: AuthRequest, res: Response): Promise<v
     res.status(500).json({ error: 'Failed to add bank account' });
   }
 };
+
+export const getTransactions = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const partnerId = req.user?.partnerId;
+    if (!partnerId) {
+      res.status(400).json({ error: 'Partner not found' });
+      return;
+    }
+
+    const payments = await prisma.payment.findMany({
+      where: {
+        job: {
+          partnerId: partnerId
+        },
+        status: 'COMPLETED'
+      },
+      include: {
+        job: {
+          select: {
+            category: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const transactions = payments.map(p => ({
+      id: p.id,
+      amount: p.netAmount,
+      type: 'CREDIT',
+      title: `Payment for ${p.job.category}`,
+      createdAt: p.createdAt
+    }));
+
+    res.json(transactions);
+  } catch (error) {
+    console.error('getTransactions error:', error);
+    res.status(500).json({ error: 'Failed to fetch transactions' });
+  }
+};
+

@@ -6,6 +6,7 @@ import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import api from '../../../src/services/apiClient';
 import { useLocationStore } from '../../../src/stores/locationStore';
+import { useAuthStore } from '../../../src/stores/authStore';
 import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,11 +35,24 @@ export default function AddAddressScreen() {
   const [isGpsLoading, setIsGpsLoading] = useState(false);
   const [locationMethod, setLocationMethod] = useState<'gps' | 'search' | 'map' | null>(null);
 
+  const currentUser = useAuthStore((state) => state.user);
+
   const { data: existing } = useQuery({
     queryKey: ['address', addressId],
     queryFn: () => api.get(`/addresses/${addressId}`).then(r => r.data),
     enabled: isEditing,
   });
+
+  useEffect(() => {
+    if (!isEditing && currentUser) {
+      if (currentUser.name) setName(currentUser.name);
+      if (currentUser.phone) {
+        // Strip country code (+91) if present, only keep 10-digit number
+        const phoneDigits = currentUser.phone.replace('+91', '').trim();
+        setPhone(phoneDigits);
+      }
+    }
+  }, [isEditing, currentUser]);
 
   useEffect(() => {
     if (existing) {
@@ -112,15 +126,50 @@ export default function AddAddressScreen() {
           const data = await res.json();
           const addr = data.address;
           if (addr) {
-            setCity(addr.city || addr.town || addr.district || '');
+            // Extract flat / building / house details
+            const flatVal = [
+              addr.house_number,
+              addr.building,
+              addr.apartment,
+              addr.flats,
+              addr.house_name
+            ].filter(Boolean).join(', ');
+            setFlat(flatVal || 'My Current Location');
+
+            // Extract street / locality / area details
+            const streetVal = [
+              addr.road,
+              addr.suburb,
+              addr.neighbourhood,
+              addr.village,
+              addr.industrial,
+              addr.residential
+            ].filter(Boolean).join(', ');
+            setStreet(streetVal || addr.county || addr.state_district || 'Local Area');
+
+            // Extract landmark details
+            const landmarkVal = [
+              addr.amenity,
+              addr.shop,
+              addr.tourism,
+              addr.office,
+              addr.landmark
+            ].filter(Boolean).join(', ');
+            setLandmark(landmarkVal || '');
+
+            // City details
+            setCity(addr.city || addr.town || addr.city_district || addr.district || addr.county || '');
+            
+            // State details
             setState(addr.state || '');
-            setPincode(addr.postcode || '');
-            setStreet(
-              [addr.road, addr.suburb, addr.neighbourhood]
-                .filter(Boolean).join(', ')
-            );
+            
+            // Pincode details
+            const postVal = addr.postcode ? addr.postcode.replace(/\s+/g, '') : '';
+            setPincode(postVal || '');
           }
-        } catch {}
+        } catch (e) {
+          console.error('[Reverse Geocode Error]:', e);
+        }
       };
 
       await reverseGeocode(latitude, longitude);
@@ -282,6 +331,7 @@ export default function AddAddressScreen() {
           <TextInput
             style={styles.input}
             placeholder="Enter a custom label (e.g. Parents' Home)"
+            placeholderTextColor="#C4B5A5"
             value={customLabel}
             onChangeText={setCustomLabel}
             maxLength={30}
@@ -293,6 +343,7 @@ export default function AddAddressScreen() {
         <TextInput
           style={styles.input}
           placeholder="Name of person at this address"
+          placeholderTextColor="#C4B5A5"
           value={name}
           onChangeText={setName}
           autoCapitalize="words"
@@ -306,6 +357,7 @@ export default function AddAddressScreen() {
           <TextInput
             style={[styles.input, { flex: 1, marginBottom: 0 }]}
             placeholder="10-digit mobile number"
+            placeholderTextColor="#C4B5A5"
             value={phone}
             onChangeText={setPhone}
             keyboardType="numeric"
@@ -318,6 +370,7 @@ export default function AddAddressScreen() {
         <TextInput
           style={styles.input}
           placeholder="e.g. Flat 4B, Sunrise Apartment"
+          placeholderTextColor="#C4B5A5"
           value={flat}
           onChangeText={setFlat}
         />
@@ -326,6 +379,7 @@ export default function AddAddressScreen() {
         <TextInput
           style={styles.input}
           placeholder="e.g. MG Road, Boring Road"
+          placeholderTextColor="#C4B5A5"
           value={street}
           onChangeText={setStreet}
         />
@@ -334,6 +388,7 @@ export default function AddAddressScreen() {
         <TextInput
           style={styles.input}
           placeholder="e.g. Near State Bank ATM"
+          placeholderTextColor="#C4B5A5"
           value={landmark}
           onChangeText={setLandmark}
         />
@@ -343,6 +398,7 @@ export default function AddAddressScreen() {
           <TextInput
             style={[styles.input, { flex: 1, marginBottom: 0 }]}
             placeholder="6-digit pincode"
+            placeholderTextColor="#C4B5A5"
             value={pincode}
             onChangeText={async (val) => {
               setPincode(val);
@@ -369,11 +425,11 @@ export default function AddAddressScreen() {
         <View style={styles.cityStateRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.fieldLabel}>City *</Text>
-            <TextInput style={styles.input} placeholder="City" value={city} onChangeText={setCity} />
+            <TextInput style={styles.input} placeholder="City" placeholderTextColor="#C4B5A5" value={city} onChangeText={setCity} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.fieldLabel}>State *</Text>
-            <TextInput style={styles.input} placeholder="State" value={state} onChangeText={setState} />
+            <TextInput style={styles.input} placeholder="State" placeholderTextColor="#C4B5A5" value={state} onChangeText={setState} />
           </View>
         </View>
 

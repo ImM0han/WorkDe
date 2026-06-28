@@ -1,39 +1,39 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import JobCard, { Job } from '../../src/components/JobCard';
 import { useTranslation } from 'react-i18next';
+import { useFocusEffect } from 'expo-router';
+import api from '../../src/services/apiClient';
 
 export default function MyJobsScreen() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'COMPLETED'>('ACTIVE');
   const queryClient = useQueryClient();
 
-  // Load dynamically accepted jobs from cache
-  const { data: activeJobs } = useQuery({
-    queryKey: ['activeJobs'],
-    queryFn: () => [
-      {
-        id: 'job_active_1', category: 'Electrician', address: 'Block C, Whitefield',
-        rate: 1200, rateType: 'DAILY', distance: 3.5, description: 'Install new AC wiring and main switchboard.',
-        extensionRequest: { requestedBy: 'CLIENT', amount: '2', status: 'PENDING' }
-      }
-    ] as Job[],
-    staleTime: Infinity,
+  const fetchPartnerJobs = async () => {
+    const res = await api.get('/jobs/partner');
+    return res.data;
+  };
+
+  const { data: jobs, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['partnerJobs'],
+    queryFn: fetchPartnerJobs,
   });
 
-  const mockCompletedJobs: Job[] = [
-    {
-      id: 'job_comp_1', category: 'Plumber', address: '123 Tech Park, Bengaluru',
-      rate: 850, rateType: 'DAILY', distance: 1.2, description: 'Fix leaking pipe in main office washroom. Completed successfully.'
-    }
-  ];
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
-  const displayJobs = activeTab === 'ACTIVE' ? (activeJobs || []) : mockCompletedJobs;
+  const activeJobs = jobs ? jobs.filter((j: any) => ['ACCEPTED', 'IN_PROGRESS', 'EXTENDED'].includes(j.status)) : [];
+  const completedJobs = jobs ? jobs.filter((j: any) => j.status === 'COMPLETED') : [];
+  const displayJobs = activeTab === 'ACTIVE' ? activeJobs : completedJobs;
 
   const handleAcceptExtension = (jobId: string) => {
-    queryClient.setQueryData(['activeJobs'], (oldData: Job[] | undefined) => {
+    queryClient.setQueryData(['partnerJobs'], (oldData: any[] | undefined) => {
       if (!oldData) return [];
       return oldData.map(j => {
         if (j.id === jobId) {
@@ -48,7 +48,7 @@ export default function MyJobsScreen() {
   };
 
   const handleDeclineExtension = (jobId: string) => {
-    queryClient.setQueryData(['activeJobs'], (oldData: Job[] | undefined) => {
+    queryClient.setQueryData(['partnerJobs'], (oldData: any[] | undefined) => {
       if (!oldData) return [];
       return oldData.map(j => {
         if (j.id === jobId) {
@@ -83,21 +83,30 @@ export default function MyJobsScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {displayJobs.map(job => (
-          <JobCard 
-            key={job.id} 
-            job={job} 
-            showAcceptButton={activeTab === 'ACTIVE'}
-            variant={activeTab === 'ACTIVE' ? 'active' : 'new'}
-            onAcceptExtension={() => handleAcceptExtension(job.id)}
-            onDeclineExtension={() => handleDeclineExtension(job.id)}
-          />
-        ))}
-        {displayJobs.length === 0 && (
-          <Text style={styles.emptyText}>{activeTab === 'ACTIVE' ? (t('jobs.noActiveJobs') || 'No active jobs') : (t('jobs.noCompletedJobs') || 'No completed jobs')}</Text>
-        )}
-      </ScrollView>
+      {isLoading ? (
+        <Text style={styles.loadingText}>{t('common.loading') || 'Loading jobs...'}</Text>
+      ) : (
+        <ScrollView 
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6B1A" />
+          }
+        >
+          {displayJobs.map(job => (
+            <JobCard 
+              key={job.id} 
+              job={job as any} 
+              showAcceptButton={activeTab === 'ACTIVE'}
+              variant={activeTab === 'ACTIVE' ? 'active' : 'new'}
+              onAcceptExtension={() => handleAcceptExtension(job.id)}
+              onDeclineExtension={() => handleDeclineExtension(job.id)}
+            />
+          ))}
+          {displayJobs.length === 0 && (
+            <Text style={styles.emptyText}>{activeTab === 'ACTIVE' ? (t('jobs.noActiveJobs') || 'No active jobs') : (t('jobs.noCompletedJobs') || 'No completed jobs')}</Text>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -151,6 +160,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24
   },
   emptyText: {
+    fontFamily: 'Nunito-SemiBold',
+    fontSize: 14,
+    color: '#C4B5A5',
+    textAlign: 'center',
+    marginTop: 40
+  },
+  loadingText: {
     fontFamily: 'Nunito-SemiBold',
     fontSize: 14,
     color: '#C4B5A5',

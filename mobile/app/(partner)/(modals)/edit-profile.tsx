@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platfo
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../../src/stores/authStore';
+import api from '../../../src/services/apiClient';
 
 export default function EditProfileModal() {
   const { user } = useAuthStore();
@@ -12,9 +14,26 @@ export default function EditProfileModal() {
   const [dob, setDob] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const handleSave = () => {
-    // API: PUT /user/profile { name, email, dob }
-    router.back();
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await api.put('/auth/profile', { name, email });
+      if (res.data?.user) {
+        useAuthStore.setState({ user: res.data.user });
+      }
+      router.back();
+    } catch (err) {
+      console.error('[EditProfile] Failed to update profile:', err);
+      // Fallback local save
+      if (user) {
+        useAuthStore.setState({ user: { ...user, name, email } });
+      }
+      router.back();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const onChangeDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -30,7 +49,12 @@ export default function EditProfileModal() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Edit Profile</Text>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Feather name="chevron-left" size={24} color="#1C1410" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit Profile</Text>
+      </View>
       
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.inputGroup}>
@@ -93,14 +117,14 @@ export default function EditProfileModal() {
 
       <TouchableOpacity 
         style={styles.submitBtnWrapper} 
-        disabled={!name || !dob}
+        disabled={!name || saving}
         onPress={handleSave}
       >
         <LinearGradient 
-          colors={!name ? ['#C4B5A5', '#C4B5A5'] : ['#FF6B1A', '#F59E0B']} 
+          colors={(!name || saving) ? ['#C4B5A5', '#C4B5A5'] : ['#FF6B1A', '#F59E0B']} 
           style={styles.submitBtn}
         >
-          <Text style={styles.submitText}>Save Changes</Text>
+          <Text style={styles.submitText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
         </LinearGradient>
       </TouchableOpacity>
     </View>
@@ -108,8 +132,28 @@ export default function EditProfileModal() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FDF6EE', padding: 24, paddingTop: 60 },
-  title: { fontFamily: 'Syne-ExtraBold', fontSize: 24, color: '#1C1410', marginBottom: 32 },
+  container: { flex: 1, backgroundColor: '#FDF6EE', paddingHorizontal: 24, paddingBottom: 24 },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 16,
+    marginBottom: 20
+  },
+  backBtn: { 
+    width: 40, 
+    height: 40, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: '#FFF0D6', 
+    borderRadius: 20,
+    marginRight: 16
+  },
+  headerTitle: { 
+    fontFamily: 'Syne-ExtraBold', 
+    fontSize: 24, 
+    color: '#1C1410' 
+  },
   content: { paddingBottom: 24 },
   inputGroup: { marginBottom: 20 },
   label: { fontFamily: 'Syne-Bold', fontSize: 14, color: '#1C1410', marginBottom: 8 },

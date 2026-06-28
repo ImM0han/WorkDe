@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { updateSkills, uploadCertificate, initiateAadhaar, verifyAadhaar, updateLocation, getNearbyPartners, getPartnerProfile } from '../controllers/partnerController';
+import { updateSkills, uploadCertificate, initiateAadhaar, verifyAadhaar, updateLocation, getNearbyPartners, getPartnerProfile, getPartnerReviews } from '../controllers/partnerController';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
@@ -14,5 +14,6 @@ router.post('/aadhaar/initiate', initiateAadhaar);
 router.post('/aadhaar/verify', verifyAadhaar);
 router.patch('/location', updateLocation);
 router.get('/nearby', getNearbyPartners);
+router.get('/:id/reviews', getPartnerReviews);
 router.get('/:id', getPartnerProfile);
 export default router;

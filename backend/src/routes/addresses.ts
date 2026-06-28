@@ -15,6 +15,17 @@ router.get('/', authenticateToken, async (req, res) => {
   res.json(addresses);
 });
 
+// ── GET /addresses/:id ────────────────────────────────────
+// Returns a single saved address by ID
+router.get('/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const address = await prisma.savedAddress.findFirst({
+    where: { id, userId: (req as any).user.id },
+  });
+  if (!address) return res.status(404).json({ error: 'Not found' });
+  res.json(address);
+});
+
 // ── POST /addresses ───────────────────────────────────────
 // Save a new address
 // If it's the first address, auto-set as default
