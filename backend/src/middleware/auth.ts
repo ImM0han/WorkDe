@@ -19,9 +19,20 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, decoded: any) => {
+  jwt.verify(token, JWT_SECRET, async (err, decoded: any) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    if (decoded && decoded.role === 'PARTNER' && !decoded.partnerId) {
+      try {
+        const { prisma } = await import('../utils/prisma');
+        const partner = await prisma.partner.findUnique({ where: { userId: decoded.id } });
+        if (partner) {
+          decoded.partnerId = partner.id;
+        }
+      } catch (e) {
+        console.error('Error looking up partnerId in auth middleware:', e);
+      }
     }
     req.user = decoded;
     next();

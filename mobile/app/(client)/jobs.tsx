@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import api from '../../src/services/apiClient';
+import { useSocketStore } from '../../src/stores/socketStore';
 
 const fetchClientJobs = async () => {
   const res = await api.get('/jobs/client');
@@ -24,45 +25,21 @@ export default function ClientJobs() {
     queryFn: fetchClientJobs,
   });
 
+  const { socket } = useSocketStore();
+
+
+
   useFocusEffect(
     useCallback(() => {
       refetch();
     }, [refetch])
   );
 
-  const handleAcceptExtension = (jobId: string) => {
-    queryClient.setQueryData(['clientJobs'], (oldData: any[] | undefined) => {
-      if (!oldData) return [];
-      return oldData.map(j => {
-        if (j.id === jobId) {
-          const updated = { ...j };
-          delete updated.extensionRequest;
-          return updated;
-        }
-        return j;
-      });
-    });
-    Toast.show({ type: 'success', text1: 'Extension Accepted', text2: 'The partner has been notified that you accepted the extra time.' });
-  };
 
-  const handleDeclineExtension = (jobId: string) => {
-    queryClient.setQueryData(['clientJobs'], (oldData: any[] | undefined) => {
-      if (!oldData) return [];
-      return oldData.map(j => {
-        if (j.id === jobId) {
-          const updated = { ...j };
-          delete updated.extensionRequest;
-          return updated;
-        }
-        return j;
-      });
-    });
-    Toast.show({ type: 'info', text1: 'Extension Declined', text2: 'The partner has been notified that you rejected the request.' });
-  };
 
   const getFilteredJobs = () => {
     if (!jobs) return [];
-    if (activeTab === 'Active') return jobs.filter((j: any) => ['POSTED', 'ACCEPTED', 'IN_PROGRESS', 'EXTENDED'].includes(j.status));
+    if (activeTab === 'Active') return jobs.filter((j: any) => ['POSTED', 'ACCEPTED', 'START_REQUESTED', 'IN_PROGRESS', 'EXTENDED', 'COMPLETED_PENDING_PAYMENT'].includes(j.status));
     return jobs.filter((j: any) => j.status === activeTab.toUpperCase());
   };
 
@@ -72,15 +49,13 @@ export default function ClientJobs() {
         style={styles.card} 
         activeOpacity={0.7}
         onPress={() => {
-          if (item.status === 'IN_PROGRESS') {
-            router.push('/(client)/(modals)/daily-ops');
-          } else if (item.status === 'COMPLETED') {
-            router.push('/(client)/(modals)/payment');
-          } else if (['POSTED', 'ACCEPTED'].includes(item.status)) {
+          if (['POSTED', 'ACCEPTED', 'START_REQUESTED', 'IN_PROGRESS', 'EXTENDED', 'COMPLETED_PENDING_PAYMENT'].includes(item.status)) {
             router.push({
               pathname: '/(client)/(modals)/job-detail',
               params: { id: item.id }
             });
+          } else if (item.status === 'COMPLETED') {
+            router.push('/(client)/(modals)/payment');
           }
         }}
       >
@@ -102,31 +77,7 @@ export default function ClientJobs() {
         </View>
       </TouchableOpacity>
       
-      {item.extensionRequest && item.extensionRequest.status === 'PENDING' && (
-        <View style={styles.extensionBanner}>
-          <View style={{ flex: 1 }}>
-            {item.extensionRequest.requestedBy === 'CLIENT' ? (
-              <Text style={styles.extensionText}>
-                Pending partner approval for +{item.extensionRequest.amount} {item.rate > 1000 ? 'Days' : 'Hours'}.
-              </Text>
-            ) : (
-              <View>
-                <Text style={styles.extensionText}>
-                  Partner requested to extend for +{item.extensionRequest.amount} {item.rate > 1000 ? 'Days' : 'Hours'}.
-                </Text>
-                <View style={styles.extensionActionRow}>
-                  <TouchableOpacity style={styles.extensionDeclineBtn} onPress={() => handleDeclineExtension(item.id)}>
-                    <Text style={styles.extensionDeclineText}>Decline</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.extensionAcceptBtn} onPress={() => handleAcceptExtension(item.id)}>
-                    <Text style={styles.extensionAcceptText}>Accept</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
-      )}
+
     </View>
   );
 

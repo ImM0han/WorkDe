@@ -50,7 +50,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
 
     const phone = bodyPhone || '+910000000000'; // For mock since we didn't store it
 
-    let user = await prisma.user.findUnique({ where: { phone } });
+    let user = await prisma.user.findUnique({ where: { phone }, include: { partner: true } });
     
     const otpToken = jwt.sign({ phone, role: role || user?.role }, OTP_TOKEN_SECRET, { expiresIn: '15m' });
 
@@ -58,7 +58,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
       return res.status(200).json({ isNewUser: true, otpToken, verified: true });
     }
 
-    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user.id, role: user.role, partnerId: user.partner?.id }, JWT_SECRET, { expiresIn: '7d' });
     return res.status(200).json({ isNewUser: false, user, token, otpToken, verified: true });
 
   } catch (error) {

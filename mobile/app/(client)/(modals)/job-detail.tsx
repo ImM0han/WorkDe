@@ -5,9 +5,38 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { colors, typography, spacing, radius, shadow } from '../../../src/theme/tokens';
 import api from '../../../src/services/apiClient';
+import { useSocketStore } from '../../../src/stores/socketStore';
 import Toast from 'react-native-toast-message';
 import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
+
+function ActiveTimer({ startedAt }: { startedAt: string }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!startedAt) return;
+    const start = new Date(startedAt).getTime();
+    
+    const update = () => {
+      const now = new Date().getTime();
+      setElapsed(Math.max(0, Math.floor((now - start) / 1000)));
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  const format = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <Text style={styles.timerText}>Active Time: {format(elapsed)}</Text>
+  );
+}
 
 export default function JobDetailScreen() {
   const router = useRouter();
@@ -19,6 +48,9 @@ export default function JobDetailScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const { socket } = useSocketStore();
+
+
 
   // Editable fields
   const [description, setDescription] = useState('');
@@ -135,6 +167,82 @@ export default function JobDetailScreen() {
     }
   };
 
+  const [isProcessingStart, setIsProcessingStart] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+
+  const handleAcceptStart = async () => {
+    setIsProcessingStart(true);
+    try {
+      await api.post(`/jobs/${id}/start-accept`);
+      Toast.show({
+        type: 'success',
+        text1: 'Job Started!',
+        text2: 'You have accepted the start request.'
+      });
+      queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
+      const res = await api.get(`/jobs/${id}`);
+      setJob(res.data);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to accept start';
+      Toast.show({ type: 'error', text1: 'Error', text2: errorMsg });
+    } finally {
+      setIsProcessingStart(false);
+    }
+  };
+
+  const handleDeclineStart = async () => {
+    setIsProcessingStart(true);
+    try {
+      await api.post(`/jobs/${id}/start-decline`);
+      Toast.show({
+        type: 'info',
+        text1: 'Start Request Declined',
+        text2: 'You have declined the start request.'
+      });
+      queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+      const res = await api.get(`/jobs/${id}`);
+      setJob(res.data);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to decline start';
+      Toast.show({ type: 'error', text1: 'Error', text2: errorMsg });
+    } finally {
+      setIsProcessingStart(false);
+    }
+  };
+
+  const handleFinalizeWork = () => {
+    Alert.alert(
+      'Confirm End Work',
+      'This will stop tracking and begin the payment process.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: performFinalizeWork
+        }
+      ]
+    );
+  };
+
+  const performFinalizeWork = async () => {
+    setIsFinalizing(true);
+    try {
+      await api.post(`/jobs/${id}/finalize-work`);
+      queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
+      router.push({
+        pathname: '/(client)/(modals)/payment-method',
+        params: { jobId: id }
+      });
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to finalize work';
+      Toast.show({ type: 'error', text1: 'Error', text2: errorMsg });
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -157,6 +265,20 @@ export default function JobDetailScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        {job?.status === 'START_REQUESTED' && (
+          <View style={styles.startRequestBanner}>
+            <Ionicons name="information-circle" size={20} color="#92400E" />
+            <Text style={styles.startRequestBannerText}>
+              Worker is requesting to start this job. Please accept or decline below.
+            </Text>
+          </View>
+        )}
+        {['IN_PROGRESS', 'EXTENDED'].includes(job?.status) && (
+          <View style={styles.activeTimerBanner}>
+            <Ionicons name="time" size={20} color="#047857" />
+            <ActiveTimer startedAt={job.startedAt || job.createdAt} />
+          </View>
+        )}
         <View style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.label}>Category</Text>
@@ -251,7 +373,7 @@ export default function JobDetailScreen() {
           </View>
         </View>
 
-        {isEditableStatus && (
+        {isEditableStatus ? (
           <View style={styles.actionSection}>
             {isEditing ? (
               <View style={styles.editActions}>
@@ -306,7 +428,66 @@ export default function JobDetailScreen() {
               </View>
             )}
           </View>
-        )}
+        ) : job?.status === 'START_REQUESTED' ? (
+          <View style={styles.actionSection}>
+            <View style={styles.normalActions}>
+              <TouchableOpacity 
+                style={[styles.declineStartBtn, { marginRight: 12 }]} 
+                onPress={handleDeclineStart}
+                disabled={isProcessingStart}
+              >
+                <Text style={styles.declineStartBtnText}>Decline ✗</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.acceptStartBtnWrapper} 
+                onPress={handleAcceptStart}
+                disabled={isProcessingStart}
+              >
+                <LinearGradient colors={['#10B981', '#059669']} style={styles.acceptStartBtn}>
+                  {isProcessingStart ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <Text style={styles.acceptStartBtnText}>Accept Start ✓</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : ['IN_PROGRESS', 'EXTENDED'].includes(job?.status) ? (
+          <View style={styles.actionSection}>
+            <View style={styles.normalActions}>
+              <TouchableOpacity 
+                style={styles.completeJobBtn}
+                onPress={handleFinalizeWork}
+                disabled={isFinalizing}
+              >
+                {isFinalizing ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Feather name="check-circle" size={16} color="#FFFFFF" />
+                    <Text style={styles.completeJobText}>Complete Job</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : job?.status === 'COMPLETED_PENDING_PAYMENT' ? (
+          <View style={styles.actionSection}>
+            <View style={styles.normalActions}>
+              <TouchableOpacity 
+                style={styles.completeJobBtn}
+                onPress={() => router.push({
+                  pathname: '/(client)/(modals)/payment-method',
+                  params: { jobId: id }
+                })}
+              >
+                <Feather name="credit-card" size={16} color="#FFFFFF" />
+                <Text style={styles.completeJobText}>Pay Final Amount</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -524,5 +705,145 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#FFF',
+  },
+  extendToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  completeJobBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#22C55E',
+    borderRadius: radius.full,
+    paddingVertical: 14,
+    gap: 8,
+    marginTop: 4,
+  },
+  completeJobText: {
+    fontFamily: typography.fontBody,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  declineExtensionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.danger,
+    borderRadius: radius.full,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  declineExtensionText: {
+    fontFamily: typography.fontBody,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.danger,
+  },
+  acceptExtensionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radius.full,
+    paddingVertical: 14,
+    gap: 8,
+    marginTop: 4,
+  },
+  acceptExtensionText: {
+    fontFamily: typography.fontBody,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: radius.full,
+    paddingVertical: 14,
+  },
+  pendingText: {
+    fontFamily: typography.fontBody,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  startRequestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  startRequestBannerText: {
+    fontFamily: typography.fontBody,
+    fontSize: 14,
+    color: '#92400E',
+    fontWeight: '700',
+    flex: 1,
+  },
+  declineStartBtn: {
+    flex: 1,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  declineStartBtnText: {
+    fontFamily: typography.fontBody,
+    fontSize: 15,
+    color: '#EF4444',
+    fontWeight: '700',
+  },
+  acceptStartBtnWrapper: {
+    flex: 2,
+  },
+  acceptStartBtn: {
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.full,
+  },
+  acceptStartBtnText: {
+    fontFamily: typography.fontBody,
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  activeTimerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  timerText: {
+    fontFamily: typography.fontBody,
+    fontSize: 14,
+    color: '#047857',
+    fontWeight: '700',
+    flex: 1,
   }
 });

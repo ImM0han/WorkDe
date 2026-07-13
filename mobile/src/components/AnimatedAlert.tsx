@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -6,6 +6,7 @@ import Animated, {
   withSpring,
   withTiming,
   withDelay,
+  runOnJS,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAlertStore } from '../stores/alertStore';
@@ -19,15 +20,22 @@ export const AnimatedAlert = () => {
   const opacity = useSharedValue(0);
   const iconScale = useSharedValue(0);
 
+  const [shouldRender, setShouldRender] = useState(false);
+
   useEffect(() => {
     if (visible) {
+      setShouldRender(true);
       opacity.value = withTiming(1, { duration: 200 });
       scale.value = withSpring(1, { damping: 15, stiffness: 200 });
       iconScale.value = withDelay(200, withSpring(1, { damping: 12, stiffness: 200 }));
     } else {
       scale.value = withTiming(0, { duration: 200 });
-      opacity.value = withTiming(0, { duration: 200 });
       iconScale.value = 0;
+      opacity.value = withTiming(0, { duration: 200 }, (finished) => {
+        if (finished) {
+          runOnJS(setShouldRender)(false);
+        }
+      });
     }
   }, [visible]);
 
@@ -40,16 +48,18 @@ export const AnimatedAlert = () => {
     transform: [{ scale: iconScale.value }],
   }));
 
-  // If we completely unmount, we can't animate out. 
-  // We use pointerEvents to ensure it doesn't block touches when invisible.
-  if (!visible && opacity.value === 0) return null;
+  const animatedBackdropStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  if (!shouldRender) return null;
 
   const iconName = type === 'success' ? 'checkmark-circle' : type === 'error' ? 'close-circle' : 'information-circle';
   const iconColor = type === 'success' ? '#4CAF50' : type === 'error' ? '#F44336' : '#2196F3';
 
   return (
     <View style={styles.overlay} pointerEvents={visible ? "auto" : "none"}>
-      <Animated.View style={[styles.backdrop, { opacity: opacity }]} pointerEvents={visible ? "auto" : "none"}>
+      <Animated.View style={[styles.backdrop, animatedBackdropStyle]} pointerEvents={visible ? "auto" : "none"}>
         <Pressable style={StyleSheet.absoluteFill} onPress={hideAlert} />
       </Animated.View>
       <Animated.View style={[styles.popup, animatedContainerStyle]} pointerEvents={visible ? "auto" : "none"}>

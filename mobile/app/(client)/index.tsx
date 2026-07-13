@@ -62,7 +62,7 @@ export default function ClientHome() {
     let matchesSearch = true;
     if (searchText.trim() !== '') {
       const query = searchText.toLowerCase().trim();
-      const nameMatch = p.user.name.toLowerCase().includes(query);
+      const nameMatch = (p.name || p.user?.name || '').toLowerCase().includes(query);
       const skillMatch = p.skills.some((skill: string) => skill.toLowerCase().includes(query));
       matchesSearch = nameMatch || skillMatch;
     }

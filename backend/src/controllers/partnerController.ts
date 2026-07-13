@@ -6,6 +6,11 @@ import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { haversineDistance } from '../utils/haversine';
 
+const DEFAULT_RADIUS = process.env.MAX_DISTANCE_KM 
+  ? process.env.MAX_DISTANCE_KM 
+  : (process.env.NODE_ENV === 'production' ? '30' : '20000');
+
+
 export const updateSkills = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const partnerId = req.user?.partnerId;
@@ -168,7 +173,7 @@ export const getPartnerProfile = async (req: AuthRequest, res: Response): Promis
 
 export const getNearbyPartners = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { lat, lng, category, radius = '10' } = req.query as Record<string, string>;
+    const { lat, lng, category, radius = DEFAULT_RADIUS } = req.query as Record<string, string>;
     if (!lat || !lng) {
       res.status(400).json({ error: 'lat and lng required' });
       return;
@@ -188,7 +193,6 @@ export const getNearbyPartners = async (req: AuthRequest, res: Response): Promis
     const partners = await prisma.partner.findMany({
       where: {
         id: { in: partnerIds },
-        isOnline: true,
         ...(category ? { skills: { has: category } } : {}),
       },
       include: {

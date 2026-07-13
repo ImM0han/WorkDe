@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { colors, typography, spacing, radius, shadow } from '../../../src/theme/tokens';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,17 +10,48 @@ import api from '../../../src/services/apiClient';
 import { useSocketStore } from '../../../src/stores/socketStore';
 import Toast from 'react-native-toast-message';
 
+function ActiveTimer({ startedAt }: { startedAt: string }) {
+  const [elapsed, setElapsed] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!startedAt) return;
+    const start = new Date(startedAt).getTime();
+    
+    const update = () => {
+      const now = new Date().getTime();
+      setElapsed(Math.max(0, Math.floor((now - start) / 1000)));
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  const format = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <Text style={styles.timerText}>⏱️ Active Duration: {format(elapsed)}</Text>
+  );
+}
+
 export default function DailyOps() {
   const router = useRouter();
   const { socket } = useSocketStore();
   
-  const { data: jobs } = useQuery({
+  const { data: allJobs } = useQuery({
     queryKey: ['activeOpsJobs'],
-    queryFn: () => api.get('/jobs', { params: { status: 'IN_PROGRESS' } }).then(r => r.data)
+    queryFn: () => api.get('/jobs/client').then(r => r.data)
   });
+
+  const jobs = allJobs ? allJobs.filter((j: any) => ['IN_PROGRESS', 'EXTENDED'].includes(j.status)) : [];
 
   const queryClient = useQueryClient();
   const [partnerLocation, setPartnerLocation] = React.useState<{ lat: number; lng: number } | null>(null);
+  const [isFinalizing, setIsFinalizing] = React.useState<Record<string, boolean>>({});
 
   const handleExtend = async (jobId: string) => {
     try {
@@ -29,6 +60,23 @@ export default function DailyOps() {
       queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Failed to extend work' });
+    }
+  };
+
+  const handleEndWork = async (jobId: string) => {
+    setIsFinalizing(prev => ({ ...prev, [jobId]: true }));
+    try {
+      await api.post(`/jobs/${jobId}/finalize-work`);
+      queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+      router.push({
+        pathname: '/(client)/(modals)/payment-method',
+        params: { jobId }
+      });
+    } catch (e) {
+      Toast.show({ type: 'error', text1: 'Failed to complete work' });
+    } finally {
+      setIsFinalizing(prev => ({ ...prev, [jobId]: false }));
     }
   };
 
@@ -66,12 +114,22 @@ export default function DailyOps() {
               jobCategory: job.category
             }} onPress={() => router.push(`/(client)/(modals)/worker-detail?workerId=${job.partner?.id}`)} />
             
+            <ActiveTimer startedAt={job.startedAt || job.createdAt} />
+
             <View style={styles.workerActions}>
               <TouchableOpacity style={styles.extendBtn} onPress={() => handleExtend(job.id)}>
                 <Text style={styles.extendBtnText}>Extend Work</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.endBtn} onPress={() => router.push(`/(client)/(modals)/payment?jobId=${job.id}`)}>
-                <Text style={styles.endBtnText}>End Work</Text>
+              <TouchableOpacity 
+                style={styles.endBtn} 
+                onPress={() => handleEndWork(job.id)}
+                disabled={isFinalizing[job.id]}
+              >
+                {isFinalizing[job.id] ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.endBtnText}>End Work</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -94,7 +152,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border2,
-    ...shadow.sm
+    ...shadow.card
   },
   workerActions: {
     flexDirection: 'row',
@@ -133,5 +191,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#fff',
     fontWeight: '700'
+  },
+  timerText: {
+    fontFamily: typography.fontMono,
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 8,
   }
 });

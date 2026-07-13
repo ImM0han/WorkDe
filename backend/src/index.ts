@@ -16,7 +16,8 @@ import clientRoutes from './routes/client';
 import addressRoutes from './routes/addresses';
 import { initSocket, setIO } from './socket';
 
-dotenv.config({ path: '.env.local' });
+dotenv.config();
+dotenv.config({ path: '.env.local', override: true });
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN || '',

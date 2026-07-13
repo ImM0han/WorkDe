@@ -11,6 +11,7 @@ import api from '../../src/services/apiClient';
 import { useSocketStore } from '../../src/stores/socketStore';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
+import Toast from 'react-native-toast-message';
 
 export default function PartnerDashboard() {
   const { t } = useTranslation();
@@ -20,10 +21,13 @@ export default function PartnerDashboard() {
   const { socket } = useSocketStore();
   const [currentLocation, setCurrentLocation] = useState<string>('Detecting location...');
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [partnerCoords, setPartnerCoords] = useState<{lat: number; lng: number} | null>(null);
 
   const { data: jobs, refetch, isFetching } = useQuery({
-    queryKey: ['nearbyJobs'],
-    queryFn: () => api.get('/jobs/nearby').then(r => r.data),
+    queryKey: ['nearbyJobs', partnerCoords],
+    queryFn: () => api.get('/jobs/nearby', {
+      params: partnerCoords ? { lat: partnerCoords.lat, lng: partnerCoords.lng } : {}
+    }).then(r => r.data),
     staleTime: 30_000,
   });
 
@@ -34,9 +38,6 @@ export default function PartnerDashboard() {
   });
 
   useEffect(() => {
-    if (!socket) return;
-    
-    // Auto-detect location and emit online
     (async () => {
       try {
         const Location = require('expo-location');
@@ -50,7 +51,14 @@ export default function PartnerDashboard() {
         const lat = loc.coords.latitude;
         const lng = loc.coords.longitude;
         
-        socket.emit('partner:online', { lat, lng });
+        setPartnerCoords({ lat, lng });
+
+        try {
+          await api.patch('/partner/location', { lat, lng, isOnline: true });
+          queryClient.invalidateQueries({ queryKey: ['nearbyJobs'] });
+        } catch (e) {
+          console.warn('Location REST update failed:', e);
+        }
 
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
@@ -67,16 +75,27 @@ export default function PartnerDashboard() {
         setCurrentLocation('Location error');
       }
     })();
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    if (partnerCoords) {
+      socket.emit('partner:online', { lat: partnerCoords.lat, lng: partnerCoords.lng });
+    }
 
     socket.on('job:new', (payload: { job: any; distance: number; client: any }) => {
-      queryClient.setQueryData(['nearbyJobs'], (old: any[] = []) => [
+      queryClient.setQueryData(['nearbyJobs', partnerCoords], (old: any[] = []) => [
         { ...payload.job, distance: payload.distance, client: payload.client },
         ...old,
       ]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     });
-    return () => { socket.off('job:new'); };
-  }, [socket, queryClient]);
+
+    return () => {
+      socket.off('job:new');
+    };
+  }, [socket, queryClient, partnerCoords]);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -94,16 +113,23 @@ export default function PartnerDashboard() {
   const handleAcceptJob = async (job: Job) => {
     try {
       await api.post(`/jobs/${job.id}/accept`);
-      queryClient.setQueryData(['nearbyJobs'], (oldData: Job[] | undefined) => {
+      queryClient.setQueryData(['nearbyJobs', partnerCoords], (oldData: Job[] | undefined) => {
         if (!oldData) return [];
         return oldData.filter((j) => j.id !== job.id);
       });
+      queryClient.invalidateQueries({ queryKey: ['nearbyJobs'] });
       queryClient.setQueryData(['activeJobs'], (oldData: Job[] | undefined) => {
         return [...(oldData || []), job];
       });
       router.push('/(partner)/jobs');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      const errorMsg = e.response?.data?.error || e.message || 'Failed to accept job';
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMsg
+      });
     }
   };
 

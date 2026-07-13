@@ -9,7 +9,7 @@ import {
 } from '../services/geoService';
 import { sendPushNotification } from '../services/pushService';
 
-interface AuthPayload { userId: string; role: 'PARTNER' | 'CLIENT'; }
+interface AuthPayload { id: string; role: 'PARTNER' | 'CLIENT'; }
 
 export function initSocket(httpServer: HttpServer) {
   const io = new Server(httpServer, {
@@ -23,11 +23,11 @@ export function initSocket(httpServer: HttpServer) {
       const token = socket.handshake.auth?.token;
       if (!token) return next(new Error('No token'));
       const payload = jwt.verify(token, process.env.JWT_SECRET!) as AuthPayload;
-      socket.data.userId = payload.userId;
+      socket.data.userId = payload.id;
       socket.data.role = payload.role;
 
       if (payload.role === 'PARTNER') {
-        const partner = await prisma.partner.findUnique({ where: { userId: payload.userId } });
+        const partner = await prisma.partner.findUnique({ where: { userId: payload.id } });
         if (!partner) return next(new Error('Partner not found'));
         socket.data.partnerId = partner.id;
       }

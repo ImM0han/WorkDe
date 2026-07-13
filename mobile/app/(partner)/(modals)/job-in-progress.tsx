@@ -16,10 +16,6 @@ export default function JobInProgressModal() {
   });
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setElapsed(prev => prev + 1);
-    }, 1000);
-
     const startTracking = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
@@ -39,10 +35,27 @@ export default function JobInProgressModal() {
     startTracking();
 
     return () => {
-      clearInterval(timer);
       Location.stopLocationUpdatesAsync('BACKGROUND_LOCATION').catch(() => {});
     };
   }, []);
+
+  useEffect(() => {
+    if (!job?.startedAt) return;
+
+    const startedTime = new Date(job.startedAt).getTime();
+    const updateElapsed = () => {
+      const now = new Date().getTime();
+      const elapsedSeconds = Math.max(0, Math.floor((now - startedTime) / 1000));
+      setElapsed(elapsedSeconds);
+    };
+
+    updateElapsed();
+    const timer = setInterval(updateElapsed, 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [job?.startedAt]);
 
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -72,12 +85,16 @@ export default function JobInProgressModal() {
         </View>
       </ScrollView>
 
+      {/* Banner above footer */}
+      <View style={styles.infoBanner}>
+        <Text style={styles.infoBannerText}>
+          Job is active. The client will mark it as complete and release payment.
+        </Text>
+      </View>
+
       <View style={styles.footer}>
         <TouchableOpacity style={styles.chatBtn} onPress={() => router.push(`/(shared)/chat/${jobId}`)}>
-          <Text style={styles.chatText}>💬 Chat</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.completeBtn} onPress={() => router.push(`/(partner)/(modals)/job-completion?jobId=${jobId}`)}>
-          <Text style={styles.completeText}>Mark as Complete ✓</Text>
+          <Text style={styles.chatText}>💬 Chat with Client</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -101,6 +118,19 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', padding: 24, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EEE0CC', gap: 12 },
   chatBtn: { flex: 1, height: 56, justifyContent: 'center', alignItems: 'center', borderRadius: 14, backgroundColor: '#FFF0D6' },
   chatText: { fontFamily: 'Nunito-Bold', fontSize: 16, color: '#FF6B1A' },
-  completeBtn: { flex: 2, height: 56, justifyContent: 'center', alignItems: 'center', borderRadius: 14, backgroundColor: '#22C55E' },
-  completeText: { fontFamily: 'Nunito-Bold', fontSize: 16, color: '#FFFFFF' }
+  infoBanner: {
+    padding: 16,
+    backgroundColor: '#FFFBEB',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#FDE68A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoBannerText: {
+    fontFamily: 'Nunito-SemiBold',
+    fontSize: 14,
+    color: '#B45309',
+    textAlign: 'center',
+  }
 });

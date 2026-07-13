@@ -1,11 +1,12 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, BackHandler } from 'react-native';
 import { colors, typography, spacing } from '../../../src/theme/tokens';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import RazorpayCheckout from 'react-native-razorpay';
 
 export default function PaymentProcessing() {
   const router = useRouter();
+  const { jobId, rate } = useLocalSearchParams<{ jobId: string; rate: string }>();
 
   useEffect(() => {
     const backAction = () => true;
@@ -16,7 +17,7 @@ export default function PaymentProcessing() {
         description: 'GigWork Payment',
         currency: 'INR',
         key: 'rzp_test_mock',
-        amount: '125000',
+        amount: rate ? (parseFloat(rate) * 100).toFixed(0) : '125000',
         name: 'GigWork',
         order_id: 'order_mock',
         theme: { color: '#FF6B1A' }, // Spec: Razorpay SDK theme color #FF6B1A
@@ -25,11 +26,11 @@ export default function PaymentProcessing() {
 
       try {
         await RazorpayCheckout.open(options);
-        router.replace('/(client)/(modals)/payment-success');
+        router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
       } catch (e) {
         // Fallback for Expo Go where native module might not be present
         setTimeout(() => {
-          router.replace('/(client)/(modals)/payment-success');
+          router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
         }, 1500);
       }
     };

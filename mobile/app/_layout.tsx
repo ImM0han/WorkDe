@@ -151,6 +151,52 @@ export default function RootLayout() {
       Toast.show({ type: 'info', text1: 'Job Done!', text2: payload.message });
     });
 
+    socket.on('job:start-requested', (payload: any) => {
+      queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
+      Toast.show({
+        type: 'info',
+        text1: 'Start Request Received',
+        text2: payload.message || 'Worker wants to start the job. Tap to view/accept.',
+        onPress: () => {
+          Toast.hide();
+          router.push({
+            pathname: '/(client)/(modals)/job-detail',
+            params: { id: payload.jobId }
+          });
+        }
+      });
+    });
+
+    socket.on('job:started', (payload: any) => {
+      queryClient.invalidateQueries({ queryKey: ['partnerJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['nearbyJobs'] });
+      Toast.show({
+        type: 'success',
+        text1: 'Job Started!',
+        text2: payload.message || 'Work is now in progress.'
+      });
+    });
+
+    socket.on('job:start-declined', (payload: any) => {
+      queryClient.invalidateQueries({ queryKey: ['partnerJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['nearbyJobs'] });
+      Toast.show({
+        type: 'error',
+        text1: 'Start Request Declined',
+        text2: payload.message || 'Client declined the start request.'
+      });
+    });
+
+    socket.on('job:finalized', (payload: any) => {
+      queryClient.invalidateQueries({ queryKey: ['partnerJobs'] });
+      Toast.show({
+        type: 'info',
+        text1: 'Work Finalized',
+        text2: payload.message || 'Client has completed work. Payment is pending.'
+      });
+    });
+
     socket.on('payment:received', () => {
       queryClient.invalidateQueries({ queryKey: ['walletBalance'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -158,6 +204,10 @@ export default function RootLayout() {
 
     return () => {
       socket.off('job:completed');
+      socket.off('job:start-requested');
+      socket.off('job:started');
+      socket.off('job:start-declined');
+      socket.off('job:finalized');
       socket.off('payment:received');
     };
   }, [socket, queryClient, router]);

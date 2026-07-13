@@ -10,17 +10,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 export default function PaymentScreen() {
   const router = useRouter();
-  const { jobId } = useLocalSearchParams();
+  const { jobId, rate, transactionId } = useLocalSearchParams<{ jobId: string; rate?: string; transactionId?: string }>();
   const [rating, setRating] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
-  const [jobAmount, setJobAmount] = useState('0.00');
-  const [transactionId] = useState(`TXN-${Math.floor(Math.random() * 1000000000)}`);
+  const [jobAmount, setJobAmount] = useState(rate || '0.00');
+  const [txnId] = useState(transactionId || `TXN-${Math.floor(Math.random() * 1000000000)}`);
+  const [job, setJob] = useState<any>(null);
 
   useEffect(() => {
     if (jobId) {
       api.get(`/jobs/${jobId}`).then(res => {
+        setJob(res.data);
         if (res.data?.rate) setJobAmount(Number(res.data.rate).toFixed(2));
-      }).catch(() => {});
+      }).catch(err => {
+        console.error('Failed to fetch job rate in PaymentScreen:', err);
+      });
     }
   }, [jobId]);
 
@@ -33,14 +37,14 @@ export default function PaymentScreen() {
     setIsSaving(true);
     try {
       const formData = new FormData();
-      formData.append('notes', `Rating: ${rating} stars | TXN: ${transactionId} | Amount: ₹${jobAmount} | Method: UPI`);
+      formData.append('notes', `Rating: ${rating} stars | TXN: ${txnId} | Amount: ₹${jobAmount} | Method: UPI`);
       
       await api.patch(`/jobs/${jobId}/complete`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
       Toast.show({ type: 'success', text1: 'Rating Saved!', text2: 'Work has been finalized.' });
-      router.replace('/(client)/(tabs)/jobs');
+      router.replace('/(client)/jobs');
     } catch (err) {
       Toast.show({ type: 'error', text1: 'Failed to save rating' });
     } finally {
@@ -65,9 +69,37 @@ export default function PaymentScreen() {
           
           <View style={styles.row}>
             <Text style={styles.label}>Transaction ID</Text>
-            <Text style={styles.value}>{transactionId}</Text>
+            <Text style={styles.value}>{txnId}</Text>
           </View>
           
+          {job?.startedAt && job?.completedAt && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                <Text style={styles.label}>Total Duration</Text>
+                <Text style={styles.value}>
+                  {(() => {
+                    const start = new Date(job.startedAt).getTime();
+                    const end = new Date(job.completedAt).getTime();
+                    const diffMs = end - start;
+                    const diffHours = diffMs / (1000 * 60 * 60);
+                    if (job.rateType === 'HOURLY') {
+                      return `${Math.max(1, parseFloat(diffHours.toFixed(2)))} hour(s)`;
+                    } else {
+                      const diffDays = diffHours / 8;
+                      return `${Math.max(1, parseFloat(diffDays.toFixed(2)))} day(s) (based on 8h/day)`;
+                    }
+                  })()}
+                </Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                <Text style={styles.label}>Base Rate</Text>
+                <Text style={styles.value}>₹{job?.rate} / {job?.rateType?.toLowerCase()}</Text>
+              </View>
+            </>
+          )}
+
           <View style={styles.divider} />
           
           <View style={styles.row}>
@@ -143,7 +175,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderColor: colors.border2,
-    ...shadow.md,
+    ...shadow.card,
     marginTop: spacing.md
   },
   transactionHeader: {

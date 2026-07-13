@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors, typography, spacing, radius, shadow } from '../../../src/theme/tokens';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 
 export default function PaymentSuccess() {
   const router = useRouter();
+  const { jobId, rate } = useLocalSearchParams<{ jobId: string; rate: string }>();
   const txId = 'TXN-' + Math.random().toString(36).substring(2, 10).toUpperCase();
 
   const handleCopy = async () => {
@@ -26,7 +27,7 @@ export default function PaymentSuccess() {
       
       <View style={styles.receipt}>
         <Text style={styles.label}>Amount Paid</Text>
-        <Text style={styles.amount}>₹1,250.00</Text>
+        <Text style={styles.amount}>₹{rate ? parseFloat(rate).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}</Text>
         
         <View style={styles.divider} />
         
@@ -36,9 +37,12 @@ export default function PaymentSuccess() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity onPress={() => router.dismissAll()}>
+      <TouchableOpacity onPress={() => router.replace({
+        pathname: '/(client)/(modals)/payment',
+        params: { jobId, rate, transactionId: txId }
+      })}>
         <LinearGradient colors={['#FF6B1A', '#F59E0B']} style={styles.button}>
-          <Text style={styles.buttonText}>Back to Home</Text>
+          <Text style={styles.buttonText}>Rate & Finalize Work</Text>
         </LinearGradient>
       </TouchableOpacity>
     </SafeAreaView>

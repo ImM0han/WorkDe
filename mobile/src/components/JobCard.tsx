@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, radius, shadow, typography, skillBadgeColors, gradients } from '../theme/tokens';
 
 export interface Job {
   id: string;
@@ -17,11 +19,7 @@ export interface Job {
   seasonLabel?: string;
   materialsIncluded?: boolean;
   materialCost?: number;
-  extensionRequest?: {
-    requestedBy: 'CLIENT' | 'PARTNER';
-    amount: string;
-    status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
-  };
+  status?: string;
 }
 
 interface JobCardProps {
@@ -30,23 +28,17 @@ interface JobCardProps {
   showAcceptButton?: boolean;
   variant?: 'new' | 'active';
   userRole?: 'CLIENT' | 'PARTNER';
-  onExtendRequest?: (amount: string) => void;
-  onAcceptExtension?: () => void;
-  onDeclineExtension?: () => void;
+  onStart?: () => void;
 }
 
-const JobCard = ({ job, onAccept, showAcceptButton = true, variant = 'new', userRole = 'PARTNER', onExtendRequest, onAcceptExtension, onDeclineExtension }: JobCardProps) => {
-  const [showExtendInput, setShowExtendInput] = useState(false);
-  const [extendAmount, setExtendAmount] = useState('1');
-
-  const handleExtendSubmit = () => {
-    if (onExtendRequest) {
-      onExtendRequest(extendAmount);
-    } else {
-      alert(`Extension request sent for ${extendAmount} ${job.rateType === 'DAILY' ? 'Days' : 'Hours'}`);
-    }
-    setShowExtendInput(false);
-  };
+const JobCard = ({ 
+  job, 
+  onAccept, 
+  showAcceptButton = true, 
+  variant = 'new', 
+  userRole = 'PARTNER', 
+  onStart
+}: JobCardProps) => {
 
   const workerCount = job.workerCount || 1;
   const acceptedCount = job.acceptedCount || 0;
@@ -62,96 +54,88 @@ const JobCard = ({ job, onAccept, showAcceptButton = true, variant = 'new', user
     priceDisplay = `₹${baseRate + job.materialCost} incl. materials`;
   }
 
-  const acceptText = isGroup ? `Join (${spotsLeft} left)` : 'View Job';
+  const acceptText = isGroup ? `Join (${spotsLeft} left)` : 'Accept';
+  const badgeStyle = skillBadgeColors[job.category] || { bg: '#F3F4F6', text: '#4B5563', border: '#D1D5DB' };
 
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{job.category}</Text>
+      {/* Tap target for job details - covers all top text info */}
+      <TouchableOpacity 
+        activeOpacity={0.7}
+        onPress={() => {
+          if (userRole === 'CLIENT') {
+            router.push({
+              pathname: '/(client)/(modals)/job-detail',
+              params: { id: job.id }
+            });
+          } else if (['IN_PROGRESS', 'EXTENDED'].includes(job.status || '')) {
+            router.push(`/(partner)/(modals)/job-in-progress?jobId=${job.id}`);
+          } else {
+            router.push(`/(partner)/(modals)/job-detail?jobId=${job.id}${job.distance !== undefined ? `&distance=${job.distance}` : ''}`);
+          }
+        }}
+      >
+        <View style={styles.header}>
+          <View style={[styles.badge, { backgroundColor: badgeStyle.bg, borderColor: badgeStyle.border, borderWidth: 1 }]}>
+            <Text style={[styles.badgeText, { color: badgeStyle.text }]}>{job.category}</Text>
+          </View>
+          <Text style={styles.price}>{priceDisplay}</Text>
         </View>
-        <Text style={styles.price}>{priceDisplay}</Text>
-      </View>
 
-      {/* Badges Row */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-        {isGroup && (
-          <View style={{ backgroundColor: '#EEF2FF', borderColor: '#C7D2FE', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 }}>
-            <Text style={{ color: '#3730A3', fontFamily: 'Nunito-Bold', fontSize: 11 }}>👥 {spotsLeft} spot(s) left of {workerCount}</Text>
-          </View>
-        )}
-        {job.femaleOnly && (
-          <View style={{ backgroundColor: '#FFF0F7', borderColor: '#FDB5D9', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 }}>
-            <Text style={{ color: '#9B2C6A', fontFamily: 'Nunito-Bold', fontSize: 11 }}>♀ Female only</Text>
-          </View>
-        )}
-        {job.seasonLabel && job.seasonLabel !== 'Year-round' && (
-          <View style={{ backgroundColor: '#F0FBEB', borderColor: '#BBF7A3', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 }}>
-            <Text style={{ color: '#2D6A1A', fontFamily: 'Nunito-Bold', fontSize: 11 }}>🌾 {job.seasonLabel}</Text>
-          </View>
-        )}
-        {job.materialsIncluded && (
-          <View style={{ backgroundColor: '#FFF5EB', borderColor: '#FDD0A2', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 }}>
-            <Text style={{ color: '#C05621', fontFamily: 'Nunito-Bold', fontSize: 11 }}>📦 Materials incl.</Text>
-          </View>
-        )}
-      </View>
+        {/* Badges Row */}
+        <View style={styles.badgesRow}>
+          {isGroup && (
+            <View style={styles.groupBadge}>
+              <Text style={styles.groupBadgeText}>👥 {spotsLeft} spot(s) left of {workerCount}</Text>
+            </View>
+          )}
+          {job.femaleOnly && (
+            <View style={styles.femaleBadge}>
+              <Text style={styles.femaleBadgeText}>♀ Female only</Text>
+            </View>
+          )}
+          {job.seasonLabel && job.seasonLabel !== 'Year-round' && (
+            <View style={styles.seasonBadge}>
+              <Text style={styles.seasonBadgeText}>🌾 {job.seasonLabel}</Text>
+            </View>
+          )}
+          {job.materialsIncluded && (
+            <View style={styles.materialsBadge}>
+              <Text style={styles.materialsBadgeText}>📦 Materials incl.</Text>
+            </View>
+          )}
+        </View>
 
-      <Text style={styles.title} numberOfLines={1}>{job.description.split('.')[0]}</Text>
-      
-      <View style={styles.infoRow}>
-        <Text style={styles.infoIcon}>📍</Text>
-        <Text style={styles.infoText}>{job.distance?.toFixed(1) || '1.0'} km away</Text>
-        <Text style={styles.dot}>·</Text>
-        <Text style={styles.infoIcon}>📅</Text>
-        <Text style={styles.infoText}>
-          {job.category === 'Plumber' ? 'Tomorrow' : job.category === 'Electrician' ? 'Friday' : 'Monday'}
+        <Text style={styles.title} numberOfLines={1}>{job.description.split('.')[0]}</Text>
+        
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>📍</Text>
+          <Text style={styles.infoText}>{job.distance?.toFixed(1) || '1.0'} km away</Text>
+          <Text style={styles.dot}>·</Text>
+          <Text style={styles.infoIcon}>📅</Text>
+          <Text style={styles.infoText}>
+            {job.category === 'Plumber' ? 'Tomorrow' : job.category === 'Electrician' ? 'Friday' : 'Monday'}
+          </Text>
+        </View>
+
+        <Text style={styles.description} numberOfLines={2}>
+          {job.description.substring(job.description.indexOf('.') + 1).trim() || job.description}
         </Text>
-      </View>
+      </TouchableOpacity>
 
-      <Text style={styles.description} numberOfLines={2}>
-        {job.description.substring(job.description.indexOf('.') + 1).trim()}
-      </Text>
 
-      {/* Extension Request Banner */}
-      {job.extensionRequest && job.extensionRequest.status === 'PENDING' && (
-        <View style={styles.extensionBanner}>
-          <Feather name="clock" size={16} color="#B45309" />
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            {job.extensionRequest.requestedBy === userRole ? (
-              <Text style={styles.extensionText}>
-                Pending client approval for +{job.extensionRequest.amount} {job.rateType === 'DAILY' ? 'Days' : 'Hours'}.
-              </Text>
-            ) : (
-              <View>
-                <Text style={styles.extensionText}>
-                  Client requested to extend for +{job.extensionRequest.amount} {job.rateType === 'DAILY' ? 'Days' : 'Hours'}.
-                </Text>
-                <View style={styles.extensionActionRow}>
-                  <TouchableOpacity style={styles.extensionDeclineBtn} onPress={onDeclineExtension}>
-                    <Text style={styles.extensionDeclineText}>Decline</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.extensionAcceptBtn} onPress={onAcceptExtension}>
-                    <Text style={styles.extensionAcceptText}>Accept</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
-      )}
       
+      {/* Actions Row - Outside details TouchableOpacity to prevent bubbling */}
       {showAcceptButton && variant === 'new' && (
         <View style={styles.buttonRow}>
           <TouchableOpacity 
-            style={styles.acceptButton} 
+            style={styles.acceptButtonWrapper} 
             activeOpacity={0.8}
-            onPress={() => {
-              if (onAccept) onAccept();
-              else router.push(`/(partner)/(modals)/job-detail?jobId=${job.id}`);
-            }}
+            onPress={onAccept}
           >
-            <Text style={styles.acceptButtonText}>{acceptText}</Text>
+            <LinearGradient colors={gradients.button as any} style={styles.acceptButton}>
+              <Text style={styles.acceptButtonText}>{acceptText}</Text>
+            </LinearGradient>
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -168,55 +152,41 @@ const JobCard = ({ job, onAccept, showAcceptButton = true, variant = 'new', user
 
       {showAcceptButton && variant === 'active' && (
         <View>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity 
-              style={styles.completeButton} 
-              activeOpacity={0.8}
-              onPress={() => {
-                router.push(`/(partner)/(modals)/job-completion?jobId=${job.id}`);
-              }}
-            >
-              <Text style={styles.completeButtonText}>Completed</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.extendButton} 
-              activeOpacity={0.8}
-              onPress={() => setShowExtendInput(!showExtendInput)}
-            >
-              <Text style={styles.extendButtonText}>{showExtendInput ? 'Cancel' : 'Extend'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {showExtendInput && (
-            <View style={styles.extendContainer}>
-              <Text style={styles.extendLabel}>
-                Request extra {job.rateType === 'DAILY' ? 'days' : 'hours'}:
-              </Text>
-              <View style={styles.extendInputRow}>
-                <TouchableOpacity 
-                  style={styles.counterBtn} 
-                  onPress={() => setExtendAmount(prev => Math.max(1, parseInt(prev || '1') - 1).toString())}
-                >
-                  <Feather name="minus" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                <TextInput
-                  style={styles.extendInput}
-                  value={extendAmount}
-                  onChangeText={setExtendAmount}
-                  keyboardType="numeric"
-                  maxLength={2}
-                />
-                <TouchableOpacity 
-                  style={styles.counterBtn} 
-                  onPress={() => setExtendAmount(prev => (parseInt(prev || '0') + 1).toString())}
-                >
-                  <Feather name="plus" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.extendSubmitBtn} onPress={handleExtendSubmit}>
-                  <Text style={styles.extendSubmitText}>Request</Text>
-                </TouchableOpacity>
+          {job.status === 'START_REQUESTED' ? (
+            <View style={styles.buttonRow}>
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingText}>Awaiting Start Approval</Text>
               </View>
+            </View>
+          ) : ['ACCEPTED', 'POSTED'].includes(job.status || '') ? (
+            <View style={styles.buttonRow}>
+              <TouchableOpacity 
+                style={styles.startJobButton} 
+                activeOpacity={0.8}
+                onPress={onStart}
+              >
+                <LinearGradient colors={gradients.button as any} style={styles.startJobGradientButton}>
+                  <Text style={styles.startJobButtonText}>Start Job</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          ) : job.status === 'COMPLETED_PENDING_PAYMENT' ? (
+            <View style={styles.buttonRow}>
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingText}>Awaiting Client Payment</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.buttonRow}>
+              <TouchableOpacity 
+                style={styles.inProgressBadge}
+                activeOpacity={0.8}
+                onPress={() => {
+                  router.push(`/(partner)/(modals)/job-in-progress?jobId=${job.id}`);
+                }}
+              >
+                <Text style={styles.inProgressText}>Job in Progress →</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -229,17 +199,13 @@ export default React.memo(JobCard);
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.md,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    borderColor: colors.border2,
+    ...shadow.card,
   },
   header: {
     flexDirection: 'row',
@@ -248,25 +214,23 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   badge: {
-    backgroundColor: '#EBF5FF',
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: radius.full,
   },
   badgeText: {
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 12,
-    color: '#1D4ED8',
   },
   price: {
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 15,
-    color: '#16A34A'
+    color: colors.success,
   },
   title: {
-    fontFamily: 'Nunito-Bold',
-    fontSize: 16,
-    color: '#111827',
+    fontFamily: typography.fontDisplay + '-Bold',
+    fontSize: 18,
+    color: colors.textPrimary,
     marginBottom: 8
   },
   infoRow: {
@@ -279,36 +243,97 @@ const styles = StyleSheet.create({
     marginRight: 4
   },
   infoText: {
-    fontFamily: 'Nunito-SemiBold',
+    fontFamily: typography.fontBody + '-SemiBold',
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   dot: {
     marginHorizontal: 6,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontSize: 14
   },
   description: {
-    fontFamily: 'Nunito-Regular',
+    fontFamily: typography.fontBody + '-Regular',
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 16,
     lineHeight: 20
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8
+  },
+  groupBadge: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full
+  },
+  groupBadgeText: {
+    color: '#3730A3',
+    fontFamily: typography.fontBody + '-Bold',
+    fontSize: 11
+  },
+  femaleBadge: {
+    backgroundColor: '#FFF0F7',
+    borderColor: '#FDB5D9',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full
+  },
+  femaleBadgeText: {
+    color: '#9B2C6A',
+    fontFamily: typography.fontBody + '-Bold',
+    fontSize: 11
+  },
+  seasonBadge: {
+    backgroundColor: '#F0FBEB',
+    borderColor: '#BBF7A3',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full
+  },
+  seasonBadgeText: {
+    color: '#2D6A1A',
+    fontFamily: typography.fontBody + '-Bold',
+    fontSize: 11
+  },
+  materialsBadge: {
+    backgroundColor: '#FFF5EB',
+    borderColor: '#FDD0A2',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full
+  },
+  materialsBadgeText: {
+    color: '#C05621',
+    fontFamily: typography.fontBody + '-Bold',
+    fontSize: 11
   },
   buttonRow: {
     flexDirection: 'row',
     gap: 12
   },
-  acceptButton: {
+  acceptButtonWrapper: {
     flex: 1,
     height: 40,
-    backgroundColor: '#2E7D32',
-    borderRadius: 8,
+  },
+  acceptButton: {
+    width: '100%',
+    height: '100%',
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center'
   },
   acceptButtonText: {
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 15,
     color: '#FFFFFF'
   },
@@ -317,54 +342,54 @@ const styles = StyleSheet.create({
     height: 40,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#DC2626',
-    borderRadius: 8,
+    borderColor: colors.danger,
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center'
   },
   rejectButtonText: {
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 15,
-    color: '#DC2626'
+    color: colors.danger,
   },
   completeButton: {
     flex: 1,
     height: 40,
-    backgroundColor: '#0EA5E9', // Sky Blue for complete
-    borderRadius: 8,
+    backgroundColor: colors.success,
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center'
   },
   completeButtonText: {
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 15,
     color: '#FFFFFF'
   },
   extendButton: {
     flex: 1,
     height: 40,
-    backgroundColor: '#F3F4F6', // Gray for extend
+    backgroundColor: colors.bgPage,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center'
   },
   extendButtonText: {
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 15,
-    color: '#4B5563'
+    color: colors.textSecondary,
   },
   extendContainer: {
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
   },
   extendLabel: {
-    fontFamily: 'Nunito-SemiBold',
+    fontFamily: typography.fontBody + '-SemiBold',
     fontSize: 14,
-    color: '#374151',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   extendInputRow: {
@@ -375,10 +400,10 @@ const styles = StyleSheet.create({
   counterBtn: {
     width: 36,
     height: 36,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+    borderRadius: radius.sm,
+    backgroundColor: colors.bgPage,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -386,40 +411,40 @@ const styles = StyleSheet.create({
     width: 48,
     height: 36,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
     textAlign: 'center',
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 16,
-    color: '#111827',
+    color: colors.textPrimary,
   },
   extendSubmitBtn: {
     flex: 1,
     height: 36,
-    backgroundColor: '#16A34A',
-    borderRadius: 8,
+    backgroundColor: colors.success,
+    borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
   },
   extendSubmitText: {
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 14,
     color: '#FFFFFF',
   },
   extensionBanner: {
     flexDirection: 'row',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.warningLight,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: colors.warning,
   },
   extensionText: {
-    fontFamily: 'Nunito-SemiBold',
+    fontFamily: typography.fontBody + '-SemiBold',
     fontSize: 14,
-    color: '#92400E',
+    color: colors.textSecondary,
   },
   extensionActionRow: {
     flexDirection: 'row',
@@ -431,23 +456,69 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
   },
   extensionDeclineText: {
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 13,
-    color: '#374151',
+    color: colors.textSecondary,
   },
   extensionAcceptBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#16A34A',
-    borderRadius: 6,
+    backgroundColor: colors.success,
+    borderRadius: radius.sm,
   },
   extensionAcceptText: {
-    fontFamily: 'Nunito-Bold',
+    fontFamily: typography.fontBody + '-Bold',
     fontSize: 13,
     color: '#FFFFFF',
+  },
+  startJobButton: {
+    flex: 1,
+    height: 40,
+  },
+  startJobGradientButton: {
+    width: '100%',
+    height: '100%',
+    borderRadius: radius.sm,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  startJobButtonText: {
+    fontFamily: typography.fontBody + '-Bold',
+    fontSize: 15,
+    color: '#FFFFFF'
+  },
+  inProgressBadge: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: radius.sm,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  inProgressText: {
+    fontFamily: typography.fontBody + '-Bold',
+    fontSize: 15,
+    color: '#D97706'
+  },
+  pendingBadge: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: radius.sm,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  pendingText: {
+    fontFamily: typography.fontBody + '-Bold',
+    fontSize: 14,
+    color: '#D97706'
   }
 });

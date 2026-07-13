@@ -14,7 +14,15 @@ export async function addPartnerToPool(
   } catch (err: any) {
     console.warn(`[Redis Geo Warning] geoadd failed for partner ${partnerId}:`, err.message);
   }
-  await redis.hset(`partner:meta:${partnerId}`, { lat: lat.toString(), lng: lng.toString(), updatedAt: Date.now().toString() });
+  try {
+    await redis.hmset(`partner:meta:${partnerId}`, { 
+      lat: lat.toString(), 
+      lng: lng.toString(), 
+      updatedAt: Date.now().toString() 
+    });
+  } catch (err: any) {
+    console.warn(`[Redis Meta Warning] hmset failed for partner ${partnerId}:`, err.message);
+  }
 }
 
 export async function updatePartnerLocation(
@@ -27,7 +35,15 @@ export async function updatePartnerLocation(
   } catch (err: any) {
     console.warn(`[Redis Geo Warning] geoadd failed for location update of partner ${partnerId}:`, err.message);
   }
-  await redis.hset(`partner:meta:${partnerId}`, { lat: lat.toString(), lng: lng.toString(), updatedAt: Date.now().toString() });
+  try {
+    await redis.hmset(`partner:meta:${partnerId}`, { 
+      lat: lat.toString(), 
+      lng: lng.toString(), 
+      updatedAt: Date.now().toString() 
+    });
+  } catch (err: any) {
+    console.warn(`[Redis Meta Warning] hmset failed for location update of partner ${partnerId}:`, err.message);
+  }
 }
 
 export async function removePartnerFromPool(partnerId: string): Promise<void> {
@@ -36,65 +52,58 @@ export async function removePartnerFromPool(partnerId: string): Promise<void> {
   } catch (err: any) {
     console.warn(`[Redis Geo Warning] zrem failed for partner ${partnerId}:`, err.message);
   }
-  await redis.del(`partner:meta:${partnerId}`);
+  try {
+    await redis.del(`partner:meta:${partnerId}`);
+  } catch (err: any) {
+    console.warn(`[Redis Meta Warning] del failed for partner ${partnerId}:`, err.message);
+  }
 }
 
 export async function findPartnersNearJob(
   lat: number,
   lng: number,
-  radiusKm: number = 10
+  radiusKm: number = 30
 ): Promise<string[]> {
   try {
-    const results = await redis.georadius(GEO_KEY, lng, lat, radiusKm, 'km', 'ASC');
-    return results as string[];
-  } catch (err: any) {
-    console.warn('[Redis Geo Warning] georadius failed, falling back to database query:', err.message);
-    const onlinePartners = await prisma.partner.findMany({
+    const partners = await prisma.partner.findMany({
       where: {
-        isOnline: true,
         lastLat: { not: null },
         lastLng: { not: null }
       }
     });
-    return onlinePartners
+    return partners
       .map(p => ({ id: p.id, dist: haversineDistance(lat, lng, p.lastLat!, p.lastLng!) }))
       .filter(p => p.dist <= radiusKm)
       .sort((a, b) => a.dist - b.dist)
       .map(p => p.id);
+  } catch (err: any) {
+    console.error('[Geo Warning] findPartnersNearJob failed:', err.message);
+    return [];
   }
 }
 
 export async function findPartnersNearJobWithDistance(
   lat: number,
   lng: number,
-  radiusKm: number = 10
+  radiusKm: number = 30
 ): Promise<Array<{ partnerId: string; distanceKm: number }>> {
   try {
-    const results = await redis.georadius(
-      GEO_KEY, lng, lat, radiusKm, 'km',
-      'WITHCOORD', 'WITHDIST', 'ASC'
-    ) as Array<[string, string, [string, string]]>;
-
-    return results.map(([partnerId, dist]) => ({
-      partnerId,
-      distanceKm: parseFloat(parseFloat(dist).toFixed(1)),
-    }));
-  } catch (err: any) {
-    console.warn('[Redis Geo Warning] georadius with distance failed, falling back to database query:', err.message);
-    const onlinePartners = await prisma.partner.findMany({
+    const partners = await prisma.partner.findMany({
       where: {
-        isOnline: true,
         lastLat: { not: null },
         lastLng: { not: null }
       }
     });
-    return onlinePartners
+    return partners
       .map(p => ({
         partnerId: p.id,
         distanceKm: parseFloat(haversineDistance(lat, lng, p.lastLat!, p.lastLng!).toFixed(1))
       }))
       .filter(p => p.distanceKm <= radiusKm)
       .sort((a, b) => a.distanceKm - b.distanceKm);
+  } catch (err: any) {
+    console.error('[Geo Warning] findPartnersNearJobWithDistance failed:', err.message);
+    return [];
   }
 }
 

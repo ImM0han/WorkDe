@@ -1,11 +1,12 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import JobCard, { Job } from '../../src/components/JobCard';
 import { useTranslation } from 'react-i18next';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import api from '../../src/services/apiClient';
+import { useSocketStore } from '../../src/stores/socketStore';
 
 export default function MyJobsScreen() {
   const { t } = useTranslation();
@@ -22,45 +23,41 @@ export default function MyJobsScreen() {
     queryFn: fetchPartnerJobs,
   });
 
+  const { socket } = useSocketStore();
+
+
+
   useFocusEffect(
     useCallback(() => {
       refetch();
     }, [refetch])
   );
 
-  const activeJobs = jobs ? jobs.filter((j: any) => ['ACCEPTED', 'IN_PROGRESS', 'EXTENDED'].includes(j.status)) : [];
-  const completedJobs = jobs ? jobs.filter((j: any) => j.status === 'COMPLETED') : [];
+  const activeJobs = jobs ? jobs.filter((j: any) => ['POSTED', 'ACCEPTED', 'START_REQUESTED', 'IN_PROGRESS', 'EXTENDED', 'COMPLETED_PENDING_PAYMENT'].includes(j.status) && j.payment?.status !== 'COMPLETED') : [];
+  const completedJobs = jobs ? jobs.filter((j: any) => j.status === 'COMPLETED' || j.payment?.status === 'COMPLETED') : [];
   const displayJobs = activeTab === 'ACTIVE' ? activeJobs : completedJobs;
 
-  const handleAcceptExtension = (jobId: string) => {
-    queryClient.setQueryData(['partnerJobs'], (oldData: any[] | undefined) => {
-      if (!oldData) return [];
-      return oldData.map(j => {
-        if (j.id === jobId) {
-          const updated = { ...j };
-          delete updated.extensionRequest;
-          return updated;
-        }
-        return j;
+  const handleStartJob = async (jobId: string) => {
+    try {
+      await api.post(`/jobs/${jobId}/start`);
+      Toast.show({
+        type: 'info',
+        text1: 'Start Request Sent',
+        text2: 'Awaiting client approval to start the job.'
       });
-    });
-    Toast.show({ type: 'success', text1: 'Extension Accepted', text2: 'The job duration has been successfully extended.' });
+      queryClient.invalidateQueries({ queryKey: ['partnerJobs'] });
+    } catch (e: any) {
+      console.error(e);
+      const errorMsg = e.response?.data?.error || e.message || 'Failed to start job';
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMsg
+      });
+    }
   };
 
-  const handleDeclineExtension = (jobId: string) => {
-    queryClient.setQueryData(['partnerJobs'], (oldData: any[] | undefined) => {
-      if (!oldData) return [];
-      return oldData.map(j => {
-        if (j.id === jobId) {
-          const updated = { ...j };
-          delete updated.extensionRequest;
-          return updated;
-        }
-        return j;
-      });
-    });
-    Toast.show({ type: 'info', text1: 'Extension Declined', text2: 'The extension request was rejected.' });
-  };
+
 
   return (
     <View style={styles.container}>
@@ -92,14 +89,13 @@ export default function MyJobsScreen() {
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6B1A" />
           }
         >
-          {displayJobs.map(job => (
+          {displayJobs.map((job: any) => (
             <JobCard 
               key={job.id} 
               job={job as any} 
               showAcceptButton={activeTab === 'ACTIVE'}
               variant={activeTab === 'ACTIVE' ? 'active' : 'new'}
-              onAcceptExtension={() => handleAcceptExtension(job.id)}
-              onDeclineExtension={() => handleDeclineExtension(job.id)}
+              onStart={() => handleStartJob(job.id)}
             />
           ))}
           {displayJobs.length === 0 && (

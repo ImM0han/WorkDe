@@ -81,6 +81,9 @@ model Job {
   partnerIds       String[]
   completionPhotos String[]
   completionNotes  String?
+  extensionRequest Json?
+  startedAt        DateTime?
+  completedAt      DateTime?
   createdAt        DateTime  @default(now())
   payment          Payment?
   feedback         Feedback?
@@ -213,8 +216,10 @@ enum KYCStatus {
 enum JobStatus {
   POSTED
   ACCEPTED
+  START_REQUESTED
   IN_PROGRESS
   EXTENDED
+  COMPLETED_PENDING_PAYMENT
   COMPLETED
   CANCELLED
 }

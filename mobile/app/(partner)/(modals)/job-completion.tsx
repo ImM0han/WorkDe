@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ScrollView, Platform } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQueryClient } from '@tanstack/react-query';
+import api from '../../../src/services/apiClient';
+import Toast from 'react-native-toast-message';
 
 export default function JobCompletionModal() {
   const { jobId } = useLocalSearchParams();
@@ -24,13 +27,54 @@ export default function JobCompletionModal() {
     }
   };
 
+  const queryClient = useQueryClient();
+
   const handleComplete = async () => {
     setIsSubmitting(true);
-    // API: PATCH /jobs/:id/complete (Upload photos to Firebase first, then backend)
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const formData = new FormData();
+      formData.append('notes', notes);
+
+      for (let i = 0; i < photos.length; i++) {
+        const uri = photos[i];
+        const filename = uri.split('/').pop() || `photo_${i}.jpg`;
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+        formData.append('photos', {
+          uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+          name: filename,
+          type,
+        } as any);
+      }
+
+      await api.patch(`/jobs/${jobId}/complete`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      Toast.show({
+        type: 'success',
+        text1: 'Job Completed',
+        text2: 'Thank you! The client will verify the completion.'
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['partnerJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+
       router.replace('/(partner)');
-    }, 1500);
+    } catch (e: any) {
+      console.error(e);
+      const errorMsg = e.response?.data?.error || e.message || 'Failed to complete job';
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMsg
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

@@ -1,13 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { colors, typography, spacing, radius, shadow } from '../../../src/theme/tokens';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import api from '../../../src/services/apiClient';
 
 export default function PaymentMethod() {
   const router = useRouter();
+  const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const [method, setMethod] = useState('UPI');
+  const [jobAmount, setJobAmount] = useState('0.00');
+
+  useEffect(() => {
+    if (jobId) {
+      api.get(`/jobs/${jobId}`).then(res => {
+        if (res.data?.rate) setJobAmount(Number(res.data.rate).toFixed(2));
+      }).catch(err => {
+        console.error('Failed to fetch job rate in PaymentMethod:', err);
+      });
+    }
+  }, [jobId]);
 
   const methods = ['UPI', 'Credit/Debit Card', 'Net Banking'];
 
@@ -38,9 +51,12 @@ export default function PaymentMethod() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity onPress={() => router.replace('/(client)/(modals)/payment-processing')}>
+        <TouchableOpacity onPress={() => router.replace({
+          pathname: '/(client)/(modals)/payment-processing',
+          params: { jobId, rate: jobAmount }
+        })}>
           <LinearGradient colors={['#FF6B1A', '#F59E0B']} style={styles.payButton}>
-            <Text style={styles.payButtonText}>Pay ₹1,250.00</Text>
+            <Text style={styles.payButtonText}>Pay ₹{parseFloat(jobAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>

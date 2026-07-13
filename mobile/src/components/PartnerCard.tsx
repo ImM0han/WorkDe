@@ -7,48 +7,57 @@ import { Ionicons } from '@expo/vector-icons';
 interface PartnerCardProps {
   partner: {
     id: string;
-    user: { name: string; avatarUrl?: string };
-    skills: string[];
+    name?: string;
+    avatar?: string;
+    user?: { name: string; avatarUrl?: string };
+    skills?: string[];
     rating: number;
     distance?: number;
+    distanceKm?: number;
     isOnline: boolean;
   };
   onPress: () => void;
 }
 
 export const PartnerCard = React.memo(({ partner, onPress }: PartnerCardProps) => {
+  const name = partner.user?.name || partner.name || 'Professional';
+  const avatarUrl = partner.user?.avatarUrl || partner.avatar || 'https://via.placeholder.com/150';
+  const distance = partner.distance ?? partner.distanceKm;
+  const skills = partner.skills || [];
+  const rating = partner.rating ?? 0;
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
           <Image
-            source={{ uri: partner.user.avatarUrl || 'https://via.placeholder.com/150' }}
+            source={{ uri: avatarUrl }}
             style={styles.avatar}
             contentFit="cover"
           />
           <View style={[styles.statusDot, { backgroundColor: partner.isOnline ? colors.online : colors.offline }]} />
         </View>
         <View style={styles.info}>
-          <Text style={styles.name}>{partner.user.name}</Text>
+          <Text style={styles.name}>{name}</Text>
           <View style={styles.ratingRow}>
             <Ionicons name="star" size={14} color={colors.warning} />
-            <Text style={styles.ratingText}>{partner.rating.toFixed(1)}</Text>
-            {partner.distance !== undefined && (
-              <Text style={styles.distanceText}> • {partner.distance.toFixed(1)}km away</Text>
+            <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+            {distance !== undefined && (
+              <Text style={styles.distanceText}> • {distance.toFixed(1)}km away</Text>
             )}
           </View>
         </View>
       </View>
       
       <View style={styles.skillsRow}>
-        {partner.skills.slice(0, 3).map((skill, index) => (
+        {skills.slice(0, 3).map((skill, index) => (
           <View key={index} style={styles.skillBadge}>
             <Text style={styles.skillText}>{skill}</Text>
           </View>
         ))}
-        {partner.skills.length > 3 && (
+        {skills.length > 3 && (
           <View style={styles.skillBadge}>
-            <Text style={styles.skillText}>+{partner.skills.length - 3}</Text>
+            <Text style={styles.skillText}>+{skills.length - 3}</Text>
           </View>
         )}
       </View>

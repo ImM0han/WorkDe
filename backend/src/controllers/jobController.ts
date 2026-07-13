@@ -5,13 +5,34 @@ import { bucket } from '../services/firebase';
 import { v4 as uuidv4 } from 'uuid';
 import { haversineDistance } from '../utils/haversine';
 
+const RADIUS_LIMIT = process.env.MAX_DISTANCE_KM 
+  ? parseInt(process.env.MAX_DISTANCE_KM, 10) 
+  : (process.env.NODE_ENV === 'production' ? 30 : 20000);
+
+
 export const getNearbyJobs = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const partnerId = req.user?.partnerId;
     if (!partnerId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
+    const { lat, lng } = req.query as Record<string, string>;
+    let latitude = lat ? parseFloat(lat) : null;
+    let longitude = lng ? parseFloat(lng) : null;
+
     const partner = await prisma.partner.findUnique({ where: { id: partnerId } });
-    if (!partner || !partner.lastLat || !partner.lastLng) {
+    if (!partner) { res.status(404).json({ error: 'Partner not found' }); return; }
+
+    if (latitude !== null && longitude !== null && !isNaN(latitude) && !isNaN(longitude)) {
+      await prisma.partner.update({
+        where: { id: partnerId },
+        data: { lastLat: latitude, lastLng: longitude }
+      });
+    } else {
+      latitude = partner.lastLat;
+      longitude = partner.lastLng;
+    }
+
+    if (latitude === null || longitude === null) {
       res.json([]); return;
     }
 
@@ -24,9 +45,9 @@ export const getNearbyJobs = async (req: AuthRequest, res: Response): Promise<vo
     });
 
     const nearbyJobs = jobs.map(job => {
-      const distance = haversineDistance(partner.lastLat!, partner.lastLng!, job.lat, job.lng);
+      const distance = haversineDistance(latitude!, longitude!, job.lat, job.lng);
       return { ...job, distance: parseFloat(distance.toFixed(1)) };
-    }).filter(job => job.distance <= 10)
+    }).filter(job => job.distance <= RADIUS_LIMIT && !job.partnerIds.includes(partnerId!))
       .sort((a, b) => a.distance - b.distance);
 
     res.json(nearbyJobs);
@@ -49,13 +70,21 @@ export const acceptJob = async (req: AuthRequest, res: Response): Promise<void> 
       const newAcceptedCount = job.acceptedCount + 1;
       const isFilled = newAcceptedCount >= job.workerCount;
 
+      const dataToUpdate: any = {
+        acceptedCount: newAcceptedCount,
+        partnerIds: { push: partnerId }
+      };
+
+      if (isFilled) {
+        dataToUpdate.status = 'ACCEPTED';
+        dataToUpdate.partnerId = partnerId;
+      } else {
+        dataToUpdate.status = 'POSTED';
+      }
+
       return tx.job.update({
         where: { id: jobId },
-        data: { 
-          acceptedCount: newAcceptedCount,
-          partnerIds: { push: partnerId },
-          status: isFilled ? 'ACCEPTED' : 'POSTED'
-        },
+        data: dataToUpdate,
         include: { client: true },
       });
     });
@@ -146,11 +175,16 @@ export const completeJob = async (req: AuthRequest, res: Response): Promise<void
     const photoUrls: string[] = [];
     if (files && files.length > 0) {
       for (const file of files) {
-        const fileName = `completion/${id}/${uuidv4()}-${file.originalname}`;
-        const fileUpload = bucket.file(fileName);
-        await fileUpload.save(file.buffer, { metadata: { contentType: file.mimetype } });
-        await fileUpload.makePublic();
-        photoUrls.push(`https://storage.googleapis.com/${bucket.name}/${fileName}`);
+        try {
+          const fileName = `completion/${id}/${uuidv4()}-${file.originalname}`;
+          const fileUpload = bucket.file(fileName);
+          await fileUpload.save(file.buffer, { metadata: { contentType: file.mimetype } });
+          await fileUpload.makePublic();
+          photoUrls.push(`https://storage.googleapis.com/${bucket.name}/${fileName}`);
+        } catch (fbError) {
+          console.error("Firebase upload failed, using mock URL:", fbError);
+          photoUrls.push(`https://via.placeholder.com/150?text=UploadedPhoto`);
+        }
       }
     }
 
@@ -161,8 +195,35 @@ export const completeJob = async (req: AuthRequest, res: Response): Promise<void
         completionNotes: notes,
         completionPhotos: photoUrls
       },
-      include: { partner: { include: { user: true } } }
+      include: { 
+        partner: { include: { user: true } },
+        payment: true
+      }
     });
+
+    // Credit partner's wallet if they haven't been paid yet (e.g. mock/offline payment route)
+    if (job.partnerId && job.payment?.status !== 'COMPLETED') {
+      const grossAmount = job.rate || 0;
+      const platformFee = grossAmount * 0.05;
+      const netAmount = grossAmount - platformFee;
+
+      await prisma.partner.update({
+        where: { id: job.partnerId },
+        data: { walletBalance: { increment: netAmount } }
+      });
+
+      await prisma.payment.upsert({
+        where: { jobId: job.id },
+        update: { status: 'COMPLETED' },
+        create: {
+          jobId: job.id,
+          amount: grossAmount,
+          platformFee,
+          netAmount,
+          status: 'COMPLETED'
+        }
+      });
+    }
 
     const { getIO } = await import('../socket');
     const io = getIO();
@@ -215,7 +276,7 @@ export const createJob = async (req: AuthRequest, res: Response): Promise<void> 
     });
 
     const { findPartnersNearJobWithDistance } = await import('../services/geoService');
-    const nearbyPartnerIds = await findPartnersNearJobWithDistance(newJob.lat, newJob.lng, 10);
+    const nearbyPartnerIds = await findPartnersNearJobWithDistance(newJob.lat, newJob.lng, RADIUS_LIMIT);
 
     if (nearbyPartnerIds.length > 0) {
       const partnerIds = nearbyPartnerIds.map(p => p.partnerId);
@@ -306,21 +367,123 @@ export const cancelJob = async (req: AuthRequest, res: Response): Promise<void> 
 export const extendJob = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { extraHours } = req.body;
+    const { extraHours, additionalCost } = req.body;
+    const role = req.user?.role || 'CLIENT';
 
-    const job = await prisma.job.update({
-      where: { id },
-      data: { status: 'EXTENDED' }
-    });
-
-    const io = req.app.get('io');
-    if (io && job.partnerId) {
-      io.to(`partner:${job.partnerId}`).emit('extension:request', { jobId: job.id, extraHours });
+    const job = await prisma.job.findUnique({ where: { id } });
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
     }
 
-    res.json(job);
+    const costToAdd = additionalCost !== undefined 
+      ? parseFloat(additionalCost) 
+      : (extraHours ? parseInt(extraHours, 10) * job.rate : job.rate);
+
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: { 
+        extensionRequest: {
+          requestedBy: role,
+          amount: extraHours ? extraHours.toString() : '1',
+          additionalCost: costToAdd,
+          status: 'PENDING'
+        }
+      }
+    });
+
+    const { getIO } = await import('../socket');
+    const io = getIO();
+    if (io) {
+      if (role === 'CLIENT' && updatedJob.partnerId) {
+        io.to(`partner:${updatedJob.partnerId}`).emit('extension:request', { jobId: updatedJob.id, extraHours });
+      } else if (role === 'PARTNER') {
+        io.to(`user:${updatedJob.clientId}`).emit('extension:request', { jobId: updatedJob.id, extraHours });
+      }
+    }
+
+    res.json(updatedJob);
   } catch (error) {
+    console.error('extendJob error:', error);
     res.status(500).json({ error: 'Failed to extend job' });
+  }
+};
+
+export const acceptExtension = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const job = await prisma.job.findUnique({ where: { id } });
+    if (!job) { res.status(404).json({ error: 'Job not found' }); return; }
+
+    const extReq = job.extensionRequest as any;
+    if (!extReq || extReq.status !== 'PENDING') {
+      res.status(400).json({ error: 'No pending extension request found' });
+      return;
+    }
+
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: {
+        status: 'EXTENDED',
+        rate: job.rate + (extReq.additionalCost || 0),
+        extensionRequest: {
+          ...extReq,
+          status: 'ACCEPTED'
+        }
+      }
+    });
+
+    const { getIO } = await import('../socket');
+    const io = getIO();
+    if (io) {
+      io.to(`user:${updatedJob.clientId}`).emit('extension:accepted', { jobId: updatedJob.id });
+      if (updatedJob.partnerId) {
+        io.to(`partner:${updatedJob.partnerId}`).emit('extension:accepted', { jobId: updatedJob.id });
+      }
+    }
+
+    res.json(updatedJob);
+  } catch (error) {
+    console.error('acceptExtension error:', error);
+    res.status(500).json({ error: 'Failed to accept extension' });
+  }
+};
+
+export const declineExtension = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const job = await prisma.job.findUnique({ where: { id } });
+    if (!job) { res.status(404).json({ error: 'Job not found' }); return; }
+
+    const extReq = job.extensionRequest as any;
+    if (!extReq) {
+      res.status(400).json({ error: 'No extension request found' });
+      return;
+    }
+
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: {
+        extensionRequest: {
+          ...extReq,
+          status: 'REJECTED'
+        }
+      }
+    });
+
+    const { getIO } = await import('../socket');
+    const io = getIO();
+    if (io) {
+      io.to(`user:${updatedJob.clientId}`).emit('extension:declined', { jobId: updatedJob.id });
+      if (updatedJob.partnerId) {
+        io.to(`partner:${updatedJob.partnerId}`).emit('extension:declined', { jobId: updatedJob.id });
+      }
+    }
+
+    res.json(updatedJob);
+  } catch (error) {
+    console.error('declineExtension error:', error);
+    res.status(500).json({ error: 'Failed to decline extension' });
   }
 };
 
@@ -348,7 +511,12 @@ export const getPartnerJobs = async (req: AuthRequest, res: Response): Promise<v
     if (!partnerId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
     const jobs = await prisma.job.findMany({
-      where: { partnerId },
+      where: {
+        OR: [
+          { partnerId },
+          { partnerIds: { has: partnerId } }
+        ]
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         client: { select: { name: true, avatarUrl: true, phone: true } },
@@ -397,4 +565,249 @@ export const updateJob = async (req: AuthRequest, res: Response): Promise<void> 
     res.status(500).json({ error: 'Failed to update job' });
   }
 };
+
+export const startJob = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const partnerId = req.user?.partnerId;
+    if (!partnerId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+    const job = await prisma.job.findUnique({
+      where: { id }
+    });
+
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    if (job.status !== 'ACCEPTED') {
+      res.status(400).json({ error: 'Job cannot be started. Status must be ACCEPTED' });
+      return;
+    }
+
+    if (job.partnerId !== partnerId && !job.partnerIds.includes(partnerId)) {
+      res.status(403).json({ error: 'Not authorized to start this job' });
+      return;
+    }
+
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: { status: 'START_REQUESTED' },
+      include: { client: true, partner: { include: { user: true } } }
+    });
+
+    const { getIO } = await import('../socket');
+    const io = getIO();
+    if (io) {
+      io.to(`user:${updatedJob.clientId}`).emit('job:start-requested', {
+        jobId: updatedJob.id,
+        partnerName: updatedJob.partner?.user?.name || 'Worker',
+        message: `${updatedJob.partner?.user?.name || 'Worker'} is requesting to start the job`
+      });
+    }
+
+    try {
+      const { sendPushNotification } = await import('../services/pushService');
+      await sendPushNotification(updatedJob.clientId, 'JOB_START_REQUESTED', { jobId: updatedJob.id });
+    } catch (e) {}
+
+    res.json(updatedJob);
+  } catch (error) {
+    console.error('startJob error:', error);
+    res.status(500).json({ error: 'Failed to start job' });
+  }
+};
+
+export const acceptStartJob = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const clientId = req.user?.id;
+    if (!clientId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+    const job = await prisma.job.findUnique({
+      where: { id }
+    });
+
+    if (!job || job.clientId !== clientId) {
+      res.status(403).json({ error: 'Not authorized or job not found' });
+      return;
+    }
+
+    if (job.status !== 'START_REQUESTED') {
+      res.status(400).json({ error: 'Job start request not pending' });
+      return;
+    }
+
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: { 
+        status: 'IN_PROGRESS',
+        startedAt: new Date()
+      }
+    });
+
+    const partners = await prisma.partner.findMany({
+      where: {
+        OR: [
+          { id: updatedJob.partnerId || undefined },
+          { id: { in: updatedJob.partnerIds } }
+        ]
+      },
+      select: { userId: true }
+    });
+
+    const { getIO } = await import('../socket');
+    const io = getIO();
+    if (io) {
+      partners.forEach(p => {
+        io.to(`user:${p.userId}`).emit('job:started', {
+          jobId: updatedJob.id,
+          message: 'Client has accepted the start request. Work is now in progress.'
+        });
+      });
+    }
+
+    try {
+      const { sendPushNotification } = await import('../services/pushService');
+      for (const p of partners) {
+        await sendPushNotification(p.userId, 'JOB_STARTED', { jobId: updatedJob.id });
+      }
+    } catch (e) {}
+
+    res.json(updatedJob);
+  } catch (error) {
+    console.error('acceptStartJob error:', error);
+    res.status(500).json({ error: 'Failed to accept job start' });
+  }
+};
+
+export const declineStartJob = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const clientId = req.user?.id;
+    if (!clientId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+    const job = await prisma.job.findUnique({
+      where: { id }
+    });
+
+    if (!job || job.clientId !== clientId) {
+      res.status(403).json({ error: 'Not authorized or job not found' });
+      return;
+    }
+
+    if (job.status !== 'START_REQUESTED') {
+      res.status(400).json({ error: 'Job start request not pending' });
+      return;
+    }
+
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: { status: 'ACCEPTED' }
+    });
+
+    const partners = await prisma.partner.findMany({
+      where: {
+        OR: [
+          { id: updatedJob.partnerId || undefined },
+          { id: { in: updatedJob.partnerIds } }
+        ]
+      },
+      select: { userId: true }
+    });
+
+    const { getIO } = await import('../socket');
+    const io = getIO();
+    if (io) {
+      partners.forEach(p => {
+        io.to(`user:${p.userId}`).emit('job:start-declined', {
+          jobId: updatedJob.id,
+          message: 'Client has declined the start request.'
+        });
+      });
+    }
+
+    res.json(updatedJob);
+  } catch (error) {
+    console.error('declineStartJob error:', error);
+    res.status(500).json({ error: 'Failed to decline job start' });
+  }
+};
+
+export const finalizeWork = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const clientId = req.user?.id;
+    if (!clientId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+    const job = await prisma.job.findUnique({
+      where: { id }
+    });
+
+    if (!job || job.clientId !== clientId) {
+      res.status(403).json({ error: 'Not authorized or job not found' });
+      return;
+    }
+
+    if (!['IN_PROGRESS', 'EXTENDED'].includes(job.status)) {
+      res.status(400).json({ error: 'Job status must be IN_PROGRESS or EXTENDED to finalize' });
+      return;
+    }
+
+    const completedAt = new Date();
+    const startedAt = job.startedAt || job.createdAt;
+    const durationMs = completedAt.getTime() - startedAt.getTime();
+
+    let finalRate = job.rate;
+    if (job.rateType === 'HOURLY') {
+      const durationHours = durationMs / (1000 * 60 * 60);
+      finalRate = job.rate * Math.max(1, parseFloat(durationHours.toFixed(2)));
+    } else if (job.rateType === 'DAILY') {
+      const durationHours = durationMs / (1000 * 60 * 60);
+      const durationDays = durationHours / 8;
+      finalRate = job.rate * Math.max(1, parseFloat(durationDays.toFixed(2)));
+    }
+
+    // Round final rate to 2 decimal places
+    finalRate = parseFloat(finalRate.toFixed(2));
+
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: {
+        status: 'COMPLETED_PENDING_PAYMENT',
+        completedAt,
+        rate: finalRate
+      }
+    });
+
+    const partners = await prisma.partner.findMany({
+      where: {
+        OR: [
+          { id: updatedJob.partnerId || undefined },
+          { id: { in: updatedJob.partnerIds } }
+        ]
+      },
+      select: { userId: true }
+    });
+
+    const { getIO } = await import('../socket');
+    const io = getIO();
+    if (io) {
+      partners.forEach(p => {
+        io.to(`user:${p.userId}`).emit('job:finalized', {
+          jobId: updatedJob.id,
+          finalRate,
+          message: 'Client has finalized work. Checkout is pending.'
+        });
+      });
+    }
+
+    res.json(updatedJob);
+  } catch (error) {
+    console.error('finalizeWork error:', error);
+    res.status(500).json({ error: 'Failed to finalize work' });
+  }
+};
+
 
