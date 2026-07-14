@@ -9,6 +9,39 @@ const RADIUS_LIMIT = process.env.MAX_DISTANCE_KM
   ? parseInt(process.env.MAX_DISTANCE_KM, 10) 
   : (process.env.NODE_ENV === 'production' ? 30 : 20000);
 
+export function calculateBilling(
+  startedAt: Date,
+  completedAt: Date,
+  baseRate: number,
+  rateType: 'HOURLY' | 'DAILY'
+): { billableHours: number; billableAmount: number } {
+  const durationMs = completedAt.getTime() - startedAt.getTime();
+  const hoursWorked = durationMs / (1000 * 60 * 60);
+
+  let billableHours = hoursWorked;
+  let billableAmount = baseRate;
+
+  if (rateType === 'HOURLY') {
+    billableHours = Math.max(1, hoursWorked);
+    billableAmount = billableHours * baseRate;
+  } else { // DAILY
+    if (hoursWorked < 4) {
+      billableHours = 4; // Half-day minimum (4 hours)
+      billableAmount = baseRate * 0.5;
+    } else if (hoursWorked >= 8) {
+      billableHours = 8; // Full day cap
+      billableAmount = baseRate;
+    } else {
+      billableHours = hoursWorked;
+      billableAmount = (hoursWorked / 8) * baseRate;
+    }
+  }
+
+  return {
+    billableHours: parseFloat(billableHours.toFixed(2)),
+    billableAmount: parseFloat(billableAmount.toFixed(2)),
+  };
+}
 
 export const getNearbyJobs = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -171,78 +204,143 @@ export const completeJob = async (req: AuthRequest, res: Response): Promise<void
     const { id } = req.params;
     const { notes } = req.body;
     const files = req.files as Express.Multer.File[];
-    
-    const photoUrls: string[] = [];
-    if (files && files.length > 0) {
-      for (const file of files) {
-        try {
-          const fileName = `completion/${id}/${uuidv4()}-${file.originalname}`;
-          const fileUpload = bucket.file(fileName);
-          await fileUpload.save(file.buffer, { metadata: { contentType: file.mimetype } });
-          await fileUpload.makePublic();
-          photoUrls.push(`https://storage.googleapis.com/${bucket.name}/${fileName}`);
-        } catch (fbError) {
-          console.error("Firebase upload failed, using mock URL:", fbError);
-          photoUrls.push(`https://via.placeholder.com/150?text=UploadedPhoto`);
-        }
-      }
-    }
+    const role = req.user?.role;
 
-    const job = await prisma.job.update({
+    const jobObj = await prisma.job.findUnique({
       where: { id },
-      data: { 
-        status: 'COMPLETED',
-        completionNotes: notes,
-        completionPhotos: photoUrls
-      },
-      include: { 
+      include: {
         partner: { include: { user: true } },
         payment: true
       }
     });
 
-    // Credit partner's wallet if they haven't been paid yet (e.g. mock/offline payment route)
-    if (job.partnerId && job.payment?.status !== 'COMPLETED') {
-      const grossAmount = job.rate || 0;
-      const platformFee = grossAmount * 0.05;
-      const netAmount = grossAmount - platformFee;
+    if (!jobObj) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
 
-      await prisma.partner.update({
-        where: { id: job.partnerId },
-        data: { walletBalance: { increment: netAmount } }
-      });
+    if (role === 'PARTNER') {
+      if (!['IN_PROGRESS', 'EXTENDED'].includes(jobObj.status)) {
+        res.status(400).json({ error: 'Job must be IN_PROGRESS or EXTENDED to complete' });
+        return;
+      }
 
-      await prisma.payment.upsert({
-        where: { jobId: job.id },
-        update: { status: 'COMPLETED' },
-        create: {
-          jobId: job.id,
-          amount: grossAmount,
-          platformFee,
-          netAmount,
-          status: 'COMPLETED'
+      const photoUrls: string[] = [];
+      if (files && files.length > 0) {
+        for (const file of files) {
+          try {
+            const fileName = `completion/${id}/${uuidv4()}-${file.originalname}`;
+            const fileUpload = bucket.file(fileName);
+            await fileUpload.save(file.buffer, { metadata: { contentType: file.mimetype } });
+            await fileUpload.makePublic();
+            photoUrls.push(`https://storage.googleapis.com/${bucket.name}/${fileName}`);
+          } catch (fbError) {
+            console.error("Firebase upload failed, using mock URL:", fbError);
+            photoUrls.push(`https://via.placeholder.com/150?text=UploadedPhoto`);
+          }
+        }
+      }
+
+      const completedAt = new Date();
+      const startedAt = jobObj.startedAt || jobObj.createdAt;
+      const { billableHours, billableAmount } = calculateBilling(startedAt, completedAt, jobObj.rate, jobObj.rateType);
+
+      const updatedJob = await prisma.job.update({
+        where: { id },
+        data: {
+          status: 'COMPLETED_PENDING_PAYMENT',
+          completedAt,
+          completionNotes: notes,
+          completionPhotos: photoUrls,
+          billableHours,
+          billableAmount
+        },
+        include: {
+          partner: { include: { user: true } },
+          payment: true
         }
       });
-    }
 
-    const { getIO } = await import('../socket');
-    const io = getIO();
-    if (io && job.partner) {
-      io.to(`user:${job.clientId}`).emit('job:completed', {
-        jobId: job.id,
-        partnerName: job.partner.user.name,
-        totalAmount: job.rate,
-        message: 'Work completed! Process payment to release funds.'
+      const { getIO } = await import('../socket');
+      const io = getIO();
+      if (io && updatedJob.partner) {
+        io.to(`user:${updatedJob.clientId}`).emit('job:completed', {
+          jobId: updatedJob.id,
+          partnerName: updatedJob.partner.user.name,
+          totalAmount: billableAmount,
+          message: 'Work completed! Process payment to release funds.'
+        });
+      }
+
+      try {
+        const { sendPushNotification } = await import('../services/pushService');
+        await sendPushNotification(updatedJob.clientId, 'JOB_COMPLETED', { jobId: updatedJob.id });
+      } catch (e) {}
+
+      res.json(updatedJob);
+      return;
+    } else {
+      // Called by Client (final payment and review submission)
+      if (jobObj.status === 'COMPLETED') {
+        res.json(jobObj);
+        return;
+      }
+
+      if (jobObj.status !== 'COMPLETED_PENDING_PAYMENT') {
+        res.status(400).json({ error: 'Job status must be COMPLETED_PENDING_PAYMENT to finalize payment' });
+        return;
+      }
+
+      const updatedJob = await prisma.job.update({
+        where: { id },
+        data: {
+          status: 'COMPLETED'
+        },
+        include: {
+          partner: { include: { user: true } },
+          payment: true
+        }
       });
+
+      // Credit partner's wallet
+      if (updatedJob.partnerId && updatedJob.payment?.status !== 'COMPLETED') {
+        const grossAmount = updatedJob.billableAmount || updatedJob.rate || 0;
+        const platformFee = grossAmount * 0.05;
+        const netAmount = grossAmount - platformFee;
+
+        await prisma.partner.update({
+          where: { id: updatedJob.partnerId },
+          data: { walletBalance: { increment: netAmount } }
+        });
+
+        await prisma.payment.upsert({
+          where: { jobId: updatedJob.id },
+          update: { status: 'COMPLETED', amount: grossAmount, platformFee, netAmount },
+          create: {
+            jobId: updatedJob.id,
+            amount: grossAmount,
+            platformFee,
+            netAmount,
+            status: 'COMPLETED'
+          }
+        });
+      }
+
+      const { getIO } = await import('../socket');
+      const io = getIO();
+      if (io && updatedJob.partner) {
+        io.to(`user:${updatedJob.partner.userId}`).emit('job:paid', {
+          jobId: updatedJob.id,
+          amount: updatedJob.billableAmount || updatedJob.rate,
+          message: 'Payment completed! Funds credited to your wallet.'
+        });
+      }
+
+      res.json(updatedJob);
+      return;
     }
-
-    try {
-      const { sendPushNotification } = await import('../services/pushService');
-      await sendPushNotification(job.clientId, 'JOB_COMPLETED', { jobId: job.id });
-    } catch (e) {}
-
-    res.json(job);
   } catch (error) {
+    console.error('completeJob error:', error);
     res.status(500).json({ error: 'Failed to complete job' });
   }
 };
@@ -757,27 +855,15 @@ export const finalizeWork = async (req: AuthRequest, res: Response): Promise<voi
 
     const completedAt = new Date();
     const startedAt = job.startedAt || job.createdAt;
-    const durationMs = completedAt.getTime() - startedAt.getTime();
-
-    let finalRate = job.rate;
-    if (job.rateType === 'HOURLY') {
-      const durationHours = durationMs / (1000 * 60 * 60);
-      finalRate = job.rate * Math.max(1, parseFloat(durationHours.toFixed(2)));
-    } else if (job.rateType === 'DAILY') {
-      const durationHours = durationMs / (1000 * 60 * 60);
-      const durationDays = durationHours / 8;
-      finalRate = job.rate * Math.max(1, parseFloat(durationDays.toFixed(2)));
-    }
-
-    // Round final rate to 2 decimal places
-    finalRate = parseFloat(finalRate.toFixed(2));
+    const { billableHours, billableAmount } = calculateBilling(startedAt, completedAt, job.rate, job.rateType);
 
     const updatedJob = await prisma.job.update({
       where: { id },
       data: {
         status: 'COMPLETED_PENDING_PAYMENT',
         completedAt,
-        rate: finalRate
+        billableHours,
+        billableAmount
       }
     });
 
@@ -797,7 +883,7 @@ export const finalizeWork = async (req: AuthRequest, res: Response): Promise<voi
       partners.forEach(p => {
         io.to(`user:${p.userId}`).emit('job:finalized', {
           jobId: updatedJob.id,
-          finalRate,
+          finalRate: billableAmount,
           message: 'Client has finalized work. Checkout is pending.'
         });
       });

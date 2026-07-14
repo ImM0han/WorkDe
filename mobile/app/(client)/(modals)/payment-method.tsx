@@ -15,7 +15,11 @@ export default function PaymentMethod() {
   useEffect(() => {
     if (jobId) {
       api.get(`/jobs/${jobId}`).then(res => {
-        if (res.data?.rate) setJobAmount(Number(res.data.rate).toFixed(2));
+        if (res.data?.billableAmount !== undefined && res.data?.billableAmount !== null) {
+          setJobAmount(Number(res.data.billableAmount).toFixed(2));
+        } else if (res.data?.rate) {
+          setJobAmount(Number(res.data.rate).toFixed(2));
+        }
       }).catch(err => {
         console.error('Failed to fetch job rate in PaymentMethod:', err);
       });

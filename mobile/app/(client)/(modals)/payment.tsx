@@ -21,7 +21,11 @@ export default function PaymentScreen() {
     if (jobId) {
       api.get(`/jobs/${jobId}`).then(res => {
         setJob(res.data);
-        if (res.data?.rate) setJobAmount(Number(res.data.rate).toFixed(2));
+        if (res.data?.billableAmount !== undefined && res.data?.billableAmount !== null) {
+          setJobAmount(Number(res.data.billableAmount).toFixed(2));
+        } else if (res.data?.rate) {
+          setJobAmount(Number(res.data.rate).toFixed(2));
+        }
       }).catch(err => {
         console.error('Failed to fetch job rate in PaymentScreen:', err);
       });
@@ -78,7 +82,11 @@ export default function PaymentScreen() {
               <View style={styles.row}>
                 <Text style={styles.label}>Total Duration</Text>
                 <Text style={styles.value}>
-                  {(() => {
+                  {job?.billableHours !== undefined && job?.billableHours !== null ? (
+                    job.rateType === 'HOURLY' 
+                      ? `${job.billableHours} hour(s)`
+                      : `${parseFloat((job.billableHours / 8).toFixed(2))} day(s) (based on 8h/day)`
+                  ) : (() => {
                     const start = new Date(job.startedAt).getTime();
                     const end = new Date(job.completedAt).getTime();
                     const diffMs = end - start;

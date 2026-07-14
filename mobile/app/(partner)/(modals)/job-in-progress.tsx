@@ -88,13 +88,22 @@ export default function JobInProgressModal() {
       {/* Banner above footer */}
       <View style={styles.infoBanner}>
         <Text style={styles.infoBannerText}>
-          Job is active. The client will mark it as complete and release payment.
+          When finished, tap "Mark as Complete" to submit proof and request payment.
         </Text>
       </View>
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.chatBtn} onPress={() => router.push(`/(shared)/chat/${jobId}`)}>
-          <Text style={styles.chatText}>💬 Chat with Client</Text>
+          <Text style={styles.chatText}>💬 Chat</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.completeBtn}
+          onPress={() => router.push({
+            pathname: '/(partner)/(modals)/job-completion',
+            params: { jobId }
+          })}
+        >
+          <Text style={styles.completeText}>✓ Mark as Complete</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -118,6 +127,8 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', padding: 24, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EEE0CC', gap: 12 },
   chatBtn: { flex: 1, height: 56, justifyContent: 'center', alignItems: 'center', borderRadius: 14, backgroundColor: '#FFF0D6' },
   chatText: { fontFamily: 'Nunito-Bold', fontSize: 16, color: '#FF6B1A' },
+  completeBtn: { flex: 1.2, height: 56, justifyContent: 'center', alignItems: 'center', borderRadius: 14, backgroundColor: '#22C55E' },
+  completeText: { fontFamily: 'Nunito-Bold', fontSize: 16, color: '#FFFFFF' },
   infoBanner: {
     padding: 16,
     backgroundColor: '#FFFBEB',

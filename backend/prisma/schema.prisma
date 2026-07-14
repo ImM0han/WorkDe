@@ -84,6 +84,8 @@ model Job {
   extensionRequest Json?
   startedAt        DateTime?
   completedAt      DateTime?
+  billableHours    Float?
+  billableAmount   Float?
   createdAt        DateTime  @default(now())
   payment          Payment?
   feedback         Feedback?
