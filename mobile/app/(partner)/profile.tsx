@@ -19,7 +19,11 @@ export default function ProfileScreen() {
       api.get('/auth/me')
         .then(res => {
           if (res.data?.user) {
-            useAuthStore.setState({ user: res.data.user });
+            const processedUser = {
+              ...res.data.user,
+              partnerId: res.data.user.partnerId || res.data.user.partner?.id
+            };
+            useAuthStore.setState({ user: processedUser });
           }
         })
         .catch(err => {
@@ -97,8 +101,18 @@ export default function ProfileScreen() {
 
         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(partner)/(modals)/aadhaar-kyc')}>
           <Text style={styles.menuText}>{t('profile.kyc')}</Text>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{user?.aadhaarStatus || 'PENDING'}</Text>
+          <View style={[
+            styles.badge,
+            user?.aadhaarStatus === 'VERIFIED' ? { backgroundColor: '#DCFCE7' } :
+            user?.aadhaarStatus === 'REJECTED' ? { backgroundColor: '#FEE2E2' } : { backgroundColor: '#FFF0D6' }
+          ]}>
+            <Text style={[
+              styles.badgeText,
+              user?.aadhaarStatus === 'VERIFIED' ? { color: '#15803D' } :
+              user?.aadhaarStatus === 'REJECTED' ? { color: '#B91C1C' } : { color: '#FF6B1A' }
+            ]}>
+              {user?.aadhaarStatus || 'PENDING'}
+            </Text>
           </View>
         </TouchableOpacity>
 

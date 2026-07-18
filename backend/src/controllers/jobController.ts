@@ -7,7 +7,7 @@ import { haversineDistance } from '../utils/haversine';
 
 const RADIUS_LIMIT = process.env.MAX_DISTANCE_KM 
   ? parseInt(process.env.MAX_DISTANCE_KM, 10) 
-  : (process.env.NODE_ENV === 'production' ? 30 : 20000);
+  : 30;
 
 export function calculateBilling(
   startedAt: Date,

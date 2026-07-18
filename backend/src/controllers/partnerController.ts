@@ -8,7 +8,7 @@ import { haversineDistance } from '../utils/haversine';
 
 const DEFAULT_RADIUS = process.env.MAX_DISTANCE_KM 
   ? process.env.MAX_DISTANCE_KM 
-  : (process.env.NODE_ENV === 'production' ? '30' : '20000');
+  : '30';
 
 
 export const updateSkills = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -179,8 +179,9 @@ export const getNearbyPartners = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
+    const parsedRadius = parseFloat(radius) || parseFloat(DEFAULT_RADIUS) || 30;
     const { findPartnersNearJobWithDistance } = await import('../services/geoService');
-    const nearbyRaw = await findPartnersNearJobWithDistance(parseFloat(lat), parseFloat(lng), parseFloat(radius));
+    const nearbyRaw = await findPartnersNearJobWithDistance(parseFloat(lat), parseFloat(lng), parsedRadius);
 
     if (nearbyRaw.length === 0) {
       res.json([]);

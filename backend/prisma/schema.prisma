@@ -55,6 +55,7 @@ model Partner {
   totalJobs     Int           @default(0)
   acceptedJobs  Job[]         @relation("PartnerJobs")
   bankAccounts  BankAccount[]
+  withdrawals   Withdrawal[]
 }
 
 model Job {
@@ -257,4 +258,14 @@ enum DisputeStatus {
   UNDER_REVIEW
   RESOLVED
   CLOSED
+}
+
+model Withdrawal {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  partnerId     String   @db.ObjectId
+  partner       Partner  @relation(fields: [partnerId], references: [id])
+  amount        Float
+  bankAccount   String?
+  status        String   @default("COMPLETED")
+  createdAt     DateTime @default(now())
 }

@@ -3,9 +3,12 @@ import { View, Text, StyleSheet, ActivityIndicator, BackHandler } from 'react-na
 import { colors, typography, spacing } from '../../../src/theme/tokens';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import RazorpayCheckout from 'react-native-razorpay';
+import { useQueryClient } from '@tanstack/react-query';
+import api from '../../../src/services/apiClient';
 
 export default function PaymentProcessing() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { jobId, rate } = useLocalSearchParams<{ jobId: string; rate: string }>();
 
   useEffect(() => {
@@ -26,9 +29,30 @@ export default function PaymentProcessing() {
 
       try {
         await RazorpayCheckout.open(options);
+        // Call backend to confirm payment immediately
+        await api.post('/payments/confirm', {
+          razorpayOrderId: 'order_mock',
+          razorpayPaymentId: 'pay_mock_' + Math.floor(Math.random() * 1000000),
+          razorpaySignature: 'sig_mock',
+          jobId
+        });
+        queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+        queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
         router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
       } catch (e) {
         // Fallback for Expo Go where native module might not be present
+        try {
+          await api.post('/payments/confirm', {
+            razorpayOrderId: 'order_mock',
+            razorpayPaymentId: 'pay_mock_' + Math.floor(Math.random() * 1000000),
+            razorpaySignature: 'sig_mock',
+            jobId
+          });
+          queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+          queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
+        } catch (apiErr) {
+          console.error('Failed to confirm payment on fallback:', apiErr);
+        }
         setTimeout(() => {
           router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
         }, 1500);

@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import api from '../../../src/services/apiClient';
+import Toast from 'react-native-toast-message';
+import { useAuthStore } from '../../../src/stores/authStore';
 
 export default function AadhaarKycModal() {
   const [step, setStep] = useState(1);
@@ -10,15 +13,71 @@ export default function AadhaarKycModal() {
   const [otp, setOtp] = useState('');
   const [dob, setDob] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [sessionId, setSessionId] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleInitiate = () => {
-    // API: POST /partner/aadhaar/initiate
-    setStep(2);
+  const handleInitiate = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await api.post('/partner/aadhaar/initiate', { aadhaar });
+      setSessionId(res.data.sessionId);
+      setStep(2);
+      
+      if (res.data.otp) {
+        Toast.show({
+          type: 'info',
+          text1: 'Verification OTP (Dev)',
+          text2: `Mock OTP: ${res.data.otp}`,
+          visibilityTime: 8000,
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || err.message || 'Failed to send OTP';
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to initiate verification',
+        text2: errMsg,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleVerify = () => {
-    // API: POST /partner/aadhaar/verify
-    setStep(3);
+  const handleVerify = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await api.post('/partner/aadhaar/verify', { sessionId, otp });
+      if (res.data.success || res.data.aadhaarStatus === 'VERIFIED') {
+        useAuthStore.setState(s => {
+          if (!s.user) return s;
+          return {
+            user: {
+              ...s.user,
+              aadhaarStatus: 'VERIFIED'
+            }
+          };
+        });
+        
+        setStep(3);
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Verification Failed',
+          text2: 'Incorrect OTP or verification failed.',
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || err.message || 'Failed to verify OTP';
+      Toast.show({
+        type: 'error',
+        text1: 'Verification Failed',
+        text2: errMsg,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDone = () => {
@@ -76,9 +135,13 @@ export default function AadhaarKycModal() {
             />
           )}
 
-          <TouchableOpacity style={styles.submitBtnWrapper} disabled={aadhaar.length !== 12 || !dob} onPress={handleInitiate}>
-            <LinearGradient colors={aadhaar.length !== 12 || !dob ? ['#C4B5A5', '#C4B5A5'] : ['#FF6B1A', '#F59E0B']} style={styles.submitBtn}>
-              <Text style={styles.submitText}>Send OTP</Text>
+          <TouchableOpacity style={styles.submitBtnWrapper} disabled={aadhaar.length !== 12 || !dob || isSubmitting} onPress={handleInitiate}>
+            <LinearGradient colors={aadhaar.length !== 12 || !dob || isSubmitting ? ['#C4B5A5', '#C4B5A5'] : ['#FF6B1A', '#F59E0B']} style={styles.submitBtn}>
+              {isSubmitting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitText}>Send OTP</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -98,9 +161,13 @@ export default function AadhaarKycModal() {
           />
           <Text style={styles.helper}>OTP sent to Aadhaar-linked number.</Text>
 
-          <TouchableOpacity style={styles.submitBtnWrapper} disabled={otp.length !== 6} onPress={handleVerify}>
-            <LinearGradient colors={otp.length !== 6 ? ['#C4B5A5', '#C4B5A5'] : ['#FF6B1A', '#F59E0B']} style={styles.submitBtn}>
-              <Text style={styles.submitText}>Verify & Complete KYC</Text>
+          <TouchableOpacity style={styles.submitBtnWrapper} disabled={otp.length !== 6 || isSubmitting} onPress={handleVerify}>
+            <LinearGradient colors={otp.length !== 6 || isSubmitting ? ['#C4B5A5', '#C4B5A5'] : ['#FF6B1A', '#F59E0B']} style={styles.submitBtn}>
+              {isSubmitting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitText}>Verify & Complete KYC</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         </View>

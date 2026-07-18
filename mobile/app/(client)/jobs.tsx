@@ -44,9 +44,9 @@ export default function ClientJobs() {
   };
 
   const renderJobCard = ({ item }: { item: any }) => (
-    <View style={{ marginBottom: 12 }}>
+    <View style={styles.cardContainer}>
       <TouchableOpacity 
-        style={styles.card} 
+        style={styles.cardClickable} 
         activeOpacity={0.7}
         onPress={() => {
           if (['POSTED', 'ACCEPTED', 'START_REQUESTED', 'IN_PROGRESS', 'EXTENDED', 'COMPLETED_PENDING_PAYMENT'].includes(item.status)) {
@@ -55,7 +55,10 @@ export default function ClientJobs() {
               params: { id: item.id }
             });
           } else if (item.status === 'COMPLETED') {
-            router.push('/(client)/(modals)/payment');
+            router.push({
+              pathname: '/(client)/(modals)/payment',
+              params: { jobId: item.id, rate: item.rate.toString() }
+            });
           }
         }}
       >
@@ -76,8 +79,62 @@ export default function ClientJobs() {
           <Text style={styles.priceText}>₹{item.rate}</Text>
         </View>
       </TouchableOpacity>
-      
 
+      {/* Actions section for client outside the TouchableOpacity */}
+      {['IN_PROGRESS', 'EXTENDED'].includes(item.status) && (
+        <View style={styles.actionRow}>
+          <TouchableOpacity 
+            style={styles.actionBtnFinish}
+            onPress={async () => {
+              try {
+                await api.post(`/jobs/${item.id}/finalize-work`);
+                queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+                router.push({
+                  pathname: '/(client)/(modals)/payment-method',
+                  params: { jobId: item.id }
+                });
+              } catch (e: any) {
+                const errorMsg = e.response?.data?.error || e.message || 'Failed to stop job';
+                Toast.show({ type: 'error', text1: 'Error', text2: errorMsg });
+              }
+            }}
+          >
+            <Text style={styles.actionBtnText}>Stop / Finish Job</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {item.status === 'COMPLETED_PENDING_PAYMENT' && (
+        <View style={styles.actionRow}>
+          <TouchableOpacity 
+            style={styles.actionBtnPay}
+            onPress={() => {
+              router.push({
+                pathname: '/(client)/(modals)/payment-method',
+                params: { jobId: item.id }
+              });
+            }}
+          >
+            <Text style={styles.actionBtnText}>Pay Now</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {item.status === 'COMPLETED' && !item.feedback && (
+        <View style={styles.actionRow}>
+          <TouchableOpacity 
+            style={styles.actionBtnRate}
+            onPress={() => {
+              router.push({
+                pathname: '/(client)/(modals)/payment',
+                params: { jobId: item.id, rate: item.rate.toString() }
+              });
+            }}
+          >
+            <Text style={styles.actionBtnText}>Rate Partner</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
@@ -160,7 +217,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: 100,
   },
-  card: {
+  cardContainer: {
     backgroundColor: colors.bgCard,
     borderRadius: radius.md,
     padding: 16,
@@ -168,6 +225,41 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border2,
     ...shadow.card,
+  },
+  cardClickable: {
+    width: '100%',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border2,
+    justifyContent: 'flex-end',
+  },
+  actionBtnFinish: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: radius.sm,
+  },
+  actionBtnPay: {
+    backgroundColor: colors.success,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: radius.sm,
+  },
+  actionBtnRate: {
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: radius.sm,
+  },
+  actionBtnText: {
+    fontFamily: typography.fontBody,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   cardHeader: {
     flexDirection: 'row',

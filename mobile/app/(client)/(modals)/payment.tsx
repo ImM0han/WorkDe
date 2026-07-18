@@ -32,25 +32,45 @@ export default function PaymentScreen() {
     }
   }, [jobId]);
 
-  const handleSave = async () => {
-    if (rating === 0) {
-      Toast.show({ type: 'error', text1: 'Please provide a rating' });
-      return;
+  const handleClose = () => {
+    if (transactionId) {
+      handleSave();
+    } else {
+      router.back();
     }
-    
+  };
+
+  const handleSave = async () => {
     setIsSaving(true);
     try {
+      if (rating > 0) {
+        try {
+          await api.post('/feedback', {
+            jobId,
+            rating,
+            comment: `Work completed successfully. Amount: ₹${jobAmount}.`
+          });
+        } catch (fbErr) {
+          console.error('Failed to submit feedback:', fbErr);
+        }
+      }
+
       const formData = new FormData();
-      formData.append('notes', `Rating: ${rating} stars | TXN: ${txnId} | Amount: ₹${jobAmount} | Method: UPI`);
+      formData.append('notes', `Rating: ${rating > 0 ? rating : 'Skipped'} stars | TXN: ${txnId} | Amount: ₹${jobAmount} | Method: UPI`);
       
       await api.patch(`/jobs/${jobId}/complete`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      Toast.show({ type: 'success', text1: 'Rating Saved!', text2: 'Work has been finalized.' });
+      Toast.show({ 
+        type: 'success', 
+        text1: rating > 0 ? 'Review Saved!' : 'Transaction Completed!', 
+        text2: 'Work has been finalized.' 
+      });
       router.replace('/(client)/jobs');
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Failed to save rating' });
+      console.error('Failed to finalize job completion:', err);
+      Toast.show({ type: 'error', text1: 'Failed to finalize transaction' });
     } finally {
       setIsSaving(false);
     }
@@ -59,7 +79,7 @@ export default function PaymentScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={handleClose} style={styles.backBtn}>
           <Ionicons name="close" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment & Review</Text>
@@ -144,7 +164,11 @@ export default function PaymentScreen() {
       <View style={styles.footer}>
         <TouchableOpacity onPress={handleSave} disabled={isSaving}>
           <LinearGradient colors={['#FF6B1A', '#F59E0B']} style={styles.saveBtn}>
-            {isSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save</Text>}
+            {isSaving ? <ActivityIndicator color="#fff" /> : (
+              <Text style={styles.saveBtnText}>
+                {rating > 0 ? 'Submit Review & Finalize' : 'Skip & Finalize'}
+              </Text>
+            )}
           </LinearGradient>
         </TouchableOpacity>
       </View>

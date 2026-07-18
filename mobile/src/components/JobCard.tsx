@@ -20,6 +20,15 @@ export interface Job {
   materialsIncluded?: boolean;
   materialCost?: number;
   status?: string;
+  startedAt?: string;
+  completedAt?: string;
+  billableHours?: number;
+  billableAmount?: number;
+  payment?: {
+    id: string;
+    amount: number;
+    status: string;
+  };
 }
 
 interface JobCardProps {
@@ -56,6 +65,35 @@ const JobCard = ({
 
   const acceptText = isGroup ? `Join (${spotsLeft} left)` : 'Accept';
   const badgeStyle = skillBadgeColors[job.category] || { bg: '#F3F4F6', text: '#4B5563', border: '#D1D5DB' };
+
+  const isDone = ['COMPLETED', 'COMPLETED_PENDING_PAYMENT'].includes(job.status || '') || job.payment?.status === 'COMPLETED';
+
+  const getDurationText = () => {
+    const hours = job.billableHours;
+    if (hours !== undefined && hours !== null) {
+      if (job.rateType === 'HOURLY') {
+        return `${hours} hour(s)`;
+      } else {
+        const days = parseFloat((hours / 8).toFixed(2));
+        return `${days} day(s) (based on 8h/day)`;
+      }
+    }
+    if (job.startedAt && job.completedAt) {
+      const start = new Date(job.startedAt).getTime();
+      const end = new Date(job.completedAt).getTime();
+      const diffMs = end - start;
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (job.rateType === 'HOURLY') {
+        return `${Math.max(1, parseFloat(diffHours.toFixed(2)))} hour(s)`;
+      } else {
+        const diffDays = diffHours / 8;
+        return `${Math.max(1, parseFloat(diffDays.toFixed(2)))} day(s) (based on 8h/day)`;
+      }
+    }
+    return null;
+  };
+
+  const totalAmount = job.billableAmount !== undefined && job.billableAmount !== null ? job.billableAmount : (job.payment?.amount !== undefined && job.payment?.amount !== null ? job.payment.amount : null);
 
   return (
     <View style={styles.card}>
@@ -121,6 +159,27 @@ const JobCard = ({
         <Text style={styles.description} numberOfLines={2}>
           {job.description.substring(job.description.indexOf('.') + 1).trim() || job.description}
         </Text>
+
+        {isDone && (
+          <View style={styles.doneSummaryContainer}>
+            <View style={styles.doneRow}>
+              <View style={styles.doneIconLabel}>
+                <Text style={styles.doneIcon}>⏱️</Text>
+                <Text style={styles.doneLabel}>Total Duration</Text>
+              </View>
+              <Text style={styles.doneValue}>{getDurationText() || 'N/A'}</Text>
+            </View>
+            <View style={styles.doneRow}>
+              <View style={styles.doneIconLabel}>
+                <Text style={styles.doneIcon}>💰</Text>
+                <Text style={styles.doneLabel}>Total Amount</Text>
+              </View>
+              <Text style={styles.doneValueAmount}>
+                ₹{totalAmount !== undefined && totalAmount !== null ? Number(totalAmount).toFixed(2) : 'N/A'}
+              </Text>
+            </View>
+          </View>
+        )}
       </TouchableOpacity>
 
 
@@ -520,5 +579,40 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontBody + '-Bold',
     fontSize: 14,
     color: '#D97706'
+  },
+  doneSummaryContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border2,
+    gap: 8,
+  },
+  doneRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  doneIconLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  doneIcon: {
+    fontSize: 14,
+  },
+  doneLabel: {
+    fontFamily: typography.fontBody + '-SemiBold',
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  doneValue: {
+    fontFamily: typography.fontBody + '-Bold',
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  doneValueAmount: {
+    fontFamily: typography.fontBody + '-Bold',
+    fontSize: 14,
+    color: colors.success,
   }
 });

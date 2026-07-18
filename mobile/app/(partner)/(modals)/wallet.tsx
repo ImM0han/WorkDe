@@ -14,24 +14,26 @@ export default function WalletScreen() {
   const { socket } = useSocketStore();
   const { user } = useAuthStore();
 
+  const partnerIdToUse = user?.partnerId || user?.partner?.id;
+
   const { data: partnerData } = useQuery({
-    queryKey: ['partnerProfile', user?.partnerId],
-    queryFn: () => api.get(`/partner/${user?.partnerId}`).then(r => r.data),
-    enabled: !!user?.partnerId
+    queryKey: ['partnerProfile', partnerIdToUse],
+    queryFn: () => api.get(`/partner/${partnerIdToUse}`).then(r => r.data),
+    enabled: !!partnerIdToUse
   });
 
   const { data: txns } = useQuery({
-    queryKey: ['transactions', user?.partnerId],
+    queryKey: ['transactions', partnerIdToUse],
     queryFn: () => api.get('/wallet/transactions').then(r => r.data).catch(() => [])
   });
 
   useEffect(() => {
     socket?.on('payment:received', (data) => {
-      queryClient.invalidateQueries({ queryKey: ['partnerProfile', user?.partnerId] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', user?.partnerId] });
+      queryClient.invalidateQueries({ queryKey: ['partnerProfile', partnerIdToUse] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', partnerIdToUse] });
     });
     return () => { socket?.off('payment:received'); };
-  }, [socket, user?.partnerId, queryClient]);
+  }, [socket, partnerIdToUse, queryClient]);
 
   const transactions = txns || [];
 

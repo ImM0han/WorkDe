@@ -31,10 +31,12 @@ export default function PartnerDashboard() {
     staleTime: 30_000,
   });
 
+  const partnerIdToUse = user?.partnerId || user?.partner?.id;
+
   const { data: partnerData } = useQuery({
-    queryKey: ['partnerProfile', user?.partnerId],
-    queryFn: () => api.get(`/partner/${user?.partnerId}`).then(r => r.data),
-    enabled: !!user?.partnerId,
+    queryKey: ['partnerProfile', partnerIdToUse],
+    queryFn: () => api.get(`/partner/${partnerIdToUse}`).then(r => r.data),
+    enabled: !!partnerIdToUse,
   });
 
   useEffect(() => {

@@ -21,7 +21,11 @@ export default function EditProfileModal() {
     try {
       const res = await api.put('/auth/profile', { name, email });
       if (res.data?.user) {
-        useAuthStore.setState({ user: res.data.user });
+        const processedUser = {
+          ...res.data.user,
+          partnerId: res.data.user.partnerId || res.data.user.partner?.id
+        };
+        useAuthStore.setState({ user: processedUser });
       }
       router.back();
     } catch (err) {

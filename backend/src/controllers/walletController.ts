@@ -35,10 +35,15 @@ export const getBalance = async (req: AuthRequest, res: Response): Promise<void>
 export const withdrawFunds = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const partnerId = req.user?.partnerId;
-    const { amount } = req.body;
+    const { amount, bankId } = req.body;
 
     if (!partnerId) {
       res.status(400).json({ error: 'Partner not found' });
+      return;
+    }
+
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      res.status(400).json({ error: 'Invalid withdrawal amount' });
       return;
     }
 
@@ -48,13 +53,38 @@ export const withdrawFunds = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // In a real app, call Razorpay payout API here
-    
-    // Deduct balance
-    await prisma.partner.update({
-      where: { id: partnerId },
-      data: { walletBalance: { decrement: amount } }
-    });
+    // Get bank account representation
+    let bankAccountStr = 'Bank Account';
+    if (bankId) {
+      const bank = await prisma.bankAccount.findUnique({ where: { id: bankId } });
+      if (bank) {
+        bankAccountStr = `**** ${bank.accountNumber.slice(-4)}`;
+      }
+    } else {
+      // Find default bank account for partner
+      const defaultBank = await prisma.bankAccount.findFirst({
+        where: { partnerId, isDefault: true }
+      });
+      if (defaultBank) {
+        bankAccountStr = `**** ${defaultBank.accountNumber.slice(-4)}`;
+      }
+    }
+
+    // Deduct balance and create withdrawal record
+    await prisma.$transaction([
+      prisma.partner.update({
+        where: { id: partnerId },
+        data: { walletBalance: { decrement: amount } }
+      }),
+      prisma.withdrawal.create({
+        data: {
+          partnerId,
+          amount,
+          bankAccount: bankAccountStr,
+          status: 'COMPLETED'
+        }
+      })
+    ]);
 
     res.json({ message: 'Withdrawal initiated successfully' });
   } catch (error) {
@@ -115,7 +145,16 @@ export const getTransactions = async (req: AuthRequest, res: Response): Promise<
       }
     });
 
-    const transactions = payments.map(p => ({
+    const withdrawals = await prisma.withdrawal.findMany({
+      where: {
+        partnerId: partnerId
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const credits = payments.map(p => ({
       id: p.id,
       amount: p.netAmount,
       type: 'CREDIT',
@@ -123,10 +162,88 @@ export const getTransactions = async (req: AuthRequest, res: Response): Promise<
       createdAt: p.createdAt
     }));
 
+    const debits = withdrawals.map(w => ({
+      id: w.id,
+      amount: w.amount,
+      type: 'DEBIT',
+      title: `Withdrawal to Bank`,
+      createdAt: w.createdAt
+    }));
+
+    const transactions = [...credits, ...debits].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
     res.json(transactions);
   } catch (error) {
     console.error('getTransactions error:', error);
     res.status(500).json({ error: 'Failed to fetch transactions' });
+  }
+};
+
+export const getTransactionById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const partnerId = req.user?.partnerId;
+    const { id } = req.params;
+
+    if (!partnerId) {
+      res.status(400).json({ error: 'Partner not found' });
+      return;
+    }
+
+    // Check payments
+    const payment = await prisma.payment.findFirst({
+      where: {
+        id,
+        job: {
+          partnerId
+        }
+      },
+      include: {
+        job: {
+          select: {
+            category: true
+          }
+        }
+      }
+    });
+
+    if (payment) {
+      res.json({
+        id: payment.id,
+        amount: payment.netAmount,
+        type: 'CREDIT',
+        title: `Payment for ${payment.job.category}`,
+        createdAt: payment.createdAt,
+        status: payment.status
+      });
+      return;
+    }
+
+    // Check withdrawals
+    const withdrawal = await prisma.withdrawal.findFirst({
+      where: {
+        id,
+        partnerId
+      }
+    });
+
+    if (withdrawal) {
+      res.json({
+        id: withdrawal.id,
+        amount: withdrawal.amount,
+        type: 'DEBIT',
+        title: `Withdrawal to Bank`,
+        createdAt: withdrawal.createdAt,
+        status: withdrawal.status
+      });
+      return;
+    }
+
+    res.status(404).json({ error: 'Transaction not found' });
+  } catch (error) {
+    console.error('getTransactionById error:', error);
+    res.status(500).json({ error: 'Failed to fetch transaction details' });
   }
 };
 

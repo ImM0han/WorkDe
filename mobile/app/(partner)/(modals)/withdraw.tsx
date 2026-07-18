@@ -4,12 +4,13 @@ import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../../src/stores/authStore';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../src/services/apiClient';
 
 export default function WithdrawModal() {
   const { user } = useAuthStore();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [amount, setAmount] = useState('');
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
   const [isBankModalVisible, setBankModalVisible] = useState(false);
@@ -41,6 +42,8 @@ export default function WithdrawModal() {
   const handleWithdraw = async () => {
     try {
       await api.post('/wallet/withdraw', { amount: Number(amount), bankId: selectedBank?.id });
+      queryClient.invalidateQueries({ queryKey: ['partnerProfile', partnerIdToUse] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', partnerIdToUse] });
       router.back();
     } catch (error) {
       console.error('Withdrawal failed', error);
