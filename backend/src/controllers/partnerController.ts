@@ -76,7 +76,7 @@ const otpStore = new Map<string, string>(); // In prod, use Redis
 export const initiateAadhaar = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const partnerId = req.user?.partnerId;
-    const { aadhaar } = req.body;
+    const { aadhaar, dob } = req.body;
 
     if (!partnerId || aadhaar?.length !== 12) {
       res.status(400).json({ error: 'Invalid Aadhaar' });
@@ -85,7 +85,7 @@ export const initiateAadhaar = async (req: AuthRequest, res: Response): Promise<
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const sessionId = uuidv4();
-    otpStore.set(`aadhaar:${sessionId}`, otp);
+    otpStore.set(`aadhaar:${sessionId}`, JSON.stringify({ otp, aadhaar, dob }));
 
     res.json({ sessionId, message: 'OTP sent', otp }); // Expose OTP for dev
   } catch (error) {
@@ -103,7 +103,23 @@ export const verifyAadhaar = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const storedOtp = otpStore.get(`aadhaar:${sessionId}`);
+    const storedDataStr = otpStore.get(`aadhaar:${sessionId}`);
+    if (!storedDataStr) {
+      res.status(400).json({ error: 'Session expired or invalid' });
+      return;
+    }
+
+    let storedOtp = '';
+    let aadhaar = '';
+    let dob = '';
+    try {
+      const parsed = JSON.parse(storedDataStr);
+      storedOtp = parsed.otp;
+      aadhaar = parsed.aadhaar;
+      dob = parsed.dob;
+    } catch (e) {
+      storedOtp = storedDataStr;
+    }
     
     // Constant time compare
     if (!storedOtp || !crypto.timingSafeEqual(Buffer.from(storedOtp), Buffer.from(otp))) {
@@ -111,9 +127,13 @@ export const verifyAadhaar = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const user = await prisma.user.update({
+    await (prisma.user as any).update({
       where: { id: req.user?.id },
-      data: { aadhaarStatus: 'VERIFIED' }
+      data: { 
+        aadhaarStatus: 'VERIFIED',
+        aadhaarNumber: aadhaar || null,
+        dob: dob ? new Date(dob) : null
+      }
     });
 
     otpStore.delete(`aadhaar:${sessionId}`);
@@ -155,7 +175,7 @@ export const getPartnerProfile = async (req: AuthRequest, res: Response): Promis
     const partner = await prisma.partner.findUnique({
       where: { id },
       include: {
-        user: { select: { name: true, phone: true } },
+        user: { select: { name: true, phone: true, avatarUrl: true, aadhaarStatus: true, createdAt: true } },
         certificates: true,
         bankAccounts: true
       }
@@ -165,7 +185,67 @@ export const getPartnerProfile = async (req: AuthRequest, res: Response): Promis
       res.status(404).json({ error: 'Partner not found' });
       return;
     }
-    res.json(partner);
+
+    const completedJobsCount = await prisma.job.count({
+      where: {
+        partnerId: partner.id,
+        status: 'COMPLETED'
+      }
+    });
+
+    if (partner.totalJobs !== completedJobsCount) {
+      await prisma.partner.update({
+        where: { id: partner.id },
+        data: { totalJobs: completedJobsCount }
+      });
+      partner.totalJobs = completedJobsCount;
+    }
+
+    const reviewsCount = await prisma.feedback.count({
+      where: {
+        job: { partnerId: partner.id }
+      }
+    });
+
+    const recentReviews = await prisma.feedback.findMany({
+      where: {
+        job: { partnerId: partner.id }
+      },
+      include: {
+        job: {
+          select: {
+            client: {
+              select: { name: true }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 3
+    });
+
+    const formattedReviews = recentReviews.map(r => ({
+      id: r.id,
+      client: r.job.client.name,
+      date: new Date(r.createdAt).toLocaleDateString(),
+      rating: r.rating,
+      text: r.comment || ''
+    }));
+
+    res.json({
+      ...partner,
+      name: partner.user.name,
+      phone: partner.user.phone,
+      avatarUrl: partner.user.avatarUrl,
+      aadhaarStatus: partner.user.aadhaarStatus,
+      aadhaarNumber: (partner.user as any).aadhaarNumber || null,
+      dob: (partner.user as any).dob || null,
+      createdAt: partner.user.createdAt,
+      jobsDone: completedJobsCount,
+      totalJobs: completedJobsCount,
+      reviewsCount,
+      recentReviews: formattedReviews
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to get profile' });
   }

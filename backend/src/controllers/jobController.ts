@@ -310,7 +310,10 @@ export const completeJob = async (req: AuthRequest, res: Response): Promise<void
 
         await prisma.partner.update({
           where: { id: updatedJob.partnerId },
-          data: { walletBalance: { increment: netAmount } }
+          data: { 
+            walletBalance: { increment: netAmount },
+            totalJobs: { increment: 1 }
+          }
         });
 
         await prisma.payment.upsert({

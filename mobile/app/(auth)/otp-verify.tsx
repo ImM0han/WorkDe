@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
+import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
 
 export default function OTPVerifyScreen() {
   const { sessionInfo, phone, mode } = useLocalSearchParams<{ sessionInfo: string, phone: string, mode?: string }>();
@@ -96,6 +97,13 @@ export default function OTPVerifyScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+      <ScatteredJobIcons zones={[
+        { top: 0.0, bottom: 0.18 },
+        { top: 0.62, bottom: 0.78 },
+        { top: 0.92, bottom: 1.0 },
+        { top: 0.18, bottom: 0.92, left: 0.0, right: 0.08 },
+        { top: 0.18, bottom: 0.92, left: 0.92, right: 1.0 }
+      ]} />
       <View style={styles.content}>
         <Text style={styles.title}>Verify your number</Text>
         <Text style={styles.subtitle}>

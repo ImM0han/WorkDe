@@ -4,7 +4,7 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, radius, shadow } from '../../src/theme/tokens';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import api from '../../src/services/apiClient';
 import { useSocketStore } from '../../src/stores/socketStore';
@@ -16,7 +16,15 @@ const fetchClientJobs = async () => {
 
 export default function ClientJobs() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'Active' | 'Completed' | 'Cancelled'>('Active');
+  const { tab } = useLocalSearchParams<{ tab?: 'Active' | 'Completed' | 'Cancelled' }>();
+  const [activeTab, setActiveTab] = useState<'Active' | 'Completed' | 'Cancelled'>(tab || 'Active');
+
+  useEffect(() => {
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [tab]);
+
   const router = useRouter();
   const queryClient = useQueryClient();
 

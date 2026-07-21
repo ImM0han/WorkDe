@@ -6,6 +6,7 @@ import Toast from 'react-native-toast-message';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
+import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
@@ -22,7 +23,7 @@ export default function LoginScreen() {
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/login-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: `+91${phone}`, password })
+        body: JSON.stringify({ phone: `+91${phone}`, password, role })
       });
       const data = await res.json();
       
@@ -51,7 +52,7 @@ export default function LoginScreen() {
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: `+91${phone}` }),
+        body: JSON.stringify({ phone: `+91${phone}`, role }),
       });
       const data = await res.json();
       
@@ -80,6 +81,12 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <ScatteredJobIcons zones={[
+        { top: 0.0, bottom: 0.15 },
+        { top: 0.85, bottom: 1.0 },
+        { top: 0.15, bottom: 0.85, left: 0.0, right: 0.09 },
+        { top: 0.15, bottom: 0.85, left: 0.91, right: 1.0 }
+      ]} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Feather name="chevron-left" size={24} color="#1C1410" />

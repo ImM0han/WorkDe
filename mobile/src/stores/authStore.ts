@@ -12,6 +12,8 @@ export interface User {
   role: 'PARTNER' | 'CLIENT';
   isVerified: boolean;
   aadhaarStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  aadhaarNumber?: string;
+  dob?: string;
   partnerId?: string;
   partner?: {
     id: string;

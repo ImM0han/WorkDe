@@ -14,10 +14,18 @@ const forgotPwdStore = new Map<string, string>();
 
 export const sendOtp = async (req: Request, res: Response) => {
   try {
-    const { phone } = req.body;
+    const { phone, role } = req.body;
     if (!phone) return res.status(400).json({ error: 'Phone number is required' });
 
     const user = await prisma.user.findUnique({ where: { phone } });
+
+    if (user && role && user.role !== role.toUpperCase()) {
+      const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
+      return res.status(400).json({ 
+        error: `This number is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
+      });
+    }
+
     const isExistingUser = !!user;
 
     const sessionInfo = Math.random().toString(36).substring(2, 15);
@@ -52,7 +60,14 @@ export const verifyOtp = async (req: Request, res: Response) => {
 
     let user = await prisma.user.findUnique({ where: { phone }, include: { partner: true } });
     
-    const otpToken = jwt.sign({ phone, role: role || user?.role }, OTP_TOKEN_SECRET, { expiresIn: '15m' });
+    if (user && role && user.role !== role.toUpperCase()) {
+      const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
+      return res.status(400).json({ 
+        error: `This number is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
+      });
+    }
+
+    const otpToken = jwt.sign({ phone, role: role ? role.toUpperCase() : user?.role }, OTP_TOKEN_SECRET, { expiresIn: '15m' });
 
     if (!user) {
       return res.status(200).json({ isNewUser: true, otpToken, verified: true });
@@ -91,6 +106,13 @@ export const setPassword = async (req: Request, res: Response) => {
     let isNewUser = false;
     
     if (user) {
+      if (role && user.role !== role.toUpperCase()) {
+        const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
+        return res.status(400).json({ 
+          error: `This number is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
+        });
+      }
+
       user = await prisma.user.update({
         where: { phone },
         data: { passwordHash },
@@ -118,7 +140,7 @@ export const setPassword = async (req: Request, res: Response) => {
 
 export const loginPassword = async (req: Request, res: Response) => {
   try {
-    const { phone, password } = req.body;
+    const { phone, password, role } = req.body;
     
     try {
       await checkLoginLockout(phone);
@@ -130,6 +152,13 @@ export const loginPassword = async (req: Request, res: Response) => {
     if (!user || !user.passwordHash) {
       await recordFailedAttempt(phone);
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (role && user.role !== role.toUpperCase()) {
+      const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
+      return res.status(400).json({ 
+        error: `This number is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
@@ -150,7 +179,17 @@ export const loginPassword = async (req: Request, res: Response) => {
 
 export const forgotPassword = async (req: Request, res: Response) => {
   try {
-    const { phone } = req.body;
+    const { phone, role } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone number is required' });
+
+    const user = await prisma.user.findUnique({ where: { phone } });
+    if (user && role && user.role !== role.toUpperCase()) {
+      const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
+      return res.status(400).json({ 
+        error: `This number is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
+      });
+    }
+
     const sessionInfo = Math.random().toString(36).substring(2, 15);
     const mockOtp = '123456'; 
     forgotPwdStore.set(sessionInfo, mockOtp);
@@ -252,6 +291,22 @@ export const me = async (req: any, res: Response) => {
       include: { partner: true }
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    if (user.partner) {
+      const completedJobsCount = await prisma.job.count({
+        where: {
+          partnerId: user.partner.id,
+          status: 'COMPLETED'
+        }
+      });
+      if (user.partner.totalJobs !== completedJobsCount) {
+        await prisma.partner.update({
+          where: { id: user.partner.id },
+          data: { totalJobs: completedJobsCount }
+        });
+        user.partner.totalJobs = completedJobsCount;
+      }
+    }
     
     return res.status(200).json({ user });
   } catch (error) {

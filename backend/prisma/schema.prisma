@@ -16,6 +16,8 @@ model User {
   role          Role      @default(CLIENT)
   isVerified    Boolean   @default(false)
   aadhaarStatus KYCStatus @default(PENDING)
+  aadhaarNumber String?
+  dob           DateTime?
   pushToken     String?
   createdAt     DateTime  @default(now())
   

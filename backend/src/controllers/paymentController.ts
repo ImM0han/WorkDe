@@ -85,7 +85,10 @@ export const confirmPayment = async (req: AuthRequest, res: Response): Promise<v
       }),
       prisma.partner.update({
         where: { id: job.partnerId! },
-        data: { walletBalance: { increment: netAmount } },
+        data: { 
+          walletBalance: { increment: netAmount },
+          totalJobs: { increment: 1 }
+        },
       }),
       prisma.job.update({ where: { id: jobId }, data: { status: 'COMPLETED' } }),
     ]);

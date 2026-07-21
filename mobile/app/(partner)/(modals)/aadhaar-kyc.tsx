@@ -8,6 +8,7 @@ import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../../src/stores/authStore';
 
 export default function AadhaarKycModal() {
+  const { user } = useAuthStore();
   const [step, setStep] = useState(1);
   const [aadhaar, setAadhaar] = useState('');
   const [otp, setOtp] = useState('');
@@ -19,7 +20,10 @@ export default function AadhaarKycModal() {
   const handleInitiate = async () => {
     setIsSubmitting(true);
     try {
-      const res = await api.post('/partner/aadhaar/initiate', { aadhaar });
+      const res = await api.post('/partner/aadhaar/initiate', { 
+        aadhaar, 
+        dob: dob ? dob.toISOString() : null 
+      });
       setSessionId(res.data.sessionId);
       setStep(2);
       
@@ -54,7 +58,9 @@ export default function AadhaarKycModal() {
           return {
             user: {
               ...s.user,
-              aadhaarStatus: 'VERIFIED'
+              aadhaarStatus: 'VERIFIED',
+              aadhaarNumber: aadhaar,
+              dob: dob ? dob.toISOString() : undefined
             }
           };
         });
@@ -94,6 +100,42 @@ export default function AadhaarKycModal() {
       setShowDatePicker(false);
     }
   };
+
+  if (user?.aadhaarStatus === 'VERIFIED') {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Aadhaar KYC</Text>
+        <Text style={styles.subtitle}>Your identity is verified and secure.</Text>
+
+        <View style={styles.verifiedCard}>
+          <View style={styles.iconWrapper}><Text style={styles.icon}>✅</Text></View>
+          <Text style={styles.verifiedTitle}>KYC Verified</Text>
+          
+          <View style={styles.divider} />
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Aadhaar Number</Text>
+            <Text style={styles.infoValue}>
+              {user?.aadhaarNumber ? `XXXX XXXX ${user.aadhaarNumber.slice(-4)}` : 'Verified Aadhaar'}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Date of Birth</Text>
+            <Text style={styles.infoValue}>
+              {user?.dob ? new Date(user.dob).toLocaleDateString('en-GB') : 'N/A'}
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.submitBtnWrapper} onPress={handleDone}>
+          <LinearGradient colors={['#FF6B1A', '#F59E0B']} style={styles.submitBtn}>
+            <Text style={styles.submitText}>Done</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -205,5 +247,11 @@ const styles = StyleSheet.create({
   successSubtitle: { fontFamily: 'Nunito-SemiBold', fontSize: 16, color: '#6B5C4E', textAlign: 'center', marginBottom: 40 },
   submitBtnWrapper: { marginTop: 'auto', width: '100%' },
   submitBtn: { height: 56, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  submitText: { fontFamily: 'Nunito-Bold', fontSize: 16, color: '#FFFFFF' }
+  submitText: { fontFamily: 'Nunito-Bold', fontSize: 16, color: '#FFFFFF' },
+  verifiedCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EEE0CC', borderRadius: 14, padding: 24, alignItems: 'center', marginBottom: 32, marginTop: 20 },
+  verifiedTitle: { fontFamily: 'Syne-ExtraBold', fontSize: 22, color: '#15803D', marginBottom: 16 },
+  divider: { height: 1, width: '100%', backgroundColor: '#EEE0CC', marginVertical: 16 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingVertical: 8 },
+  infoLabel: { fontFamily: 'Nunito-SemiBold', fontSize: 14, color: '#6B5C4E' },
+  infoValue: { fontFamily: 'Nunito-Bold', fontSize: 16, color: '#1C1410' }
 });

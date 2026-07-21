@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../src/stores/authStore';
+import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
 
 export default function RoleSelectScreen() {
   const [selectedRole, setSelectedRole] = useState<'PARTNER' | 'CLIENT' | null>(null);
@@ -22,6 +23,12 @@ export default function RoleSelectScreen() {
 
   return (
     <View style={styles.container}>
+      <ScatteredJobIcons zones={[
+        { top: 0.0, bottom: 0.22 },
+        { top: 0.78, bottom: 1.0 },
+        { top: 0.22, bottom: 0.78, left: 0.0, right: 0.10 },
+        { top: 0.22, bottom: 0.78, left: 0.90, right: 1.0 }
+      ]} />
       <Text style={styles.title}>How do you want to use GigWork?</Text>
       
       <View style={styles.cardsContainer}>

@@ -45,6 +45,16 @@ export default function PaymentSuccess() {
           <Text style={styles.buttonText}>Rate & Finalize Work</Text>
         </LinearGradient>
       </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={styles.skipButton}
+        onPress={() => router.replace({
+          pathname: '/(client)/jobs',
+          params: { tab: 'Completed' }
+        })}
+      >
+        <Text style={styles.skipButtonText}>Skip & Go to Jobs</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -60,5 +70,7 @@ const styles = StyleSheet.create({
   divider: { height: 1, width: '100%', backgroundColor: colors.border2, marginVertical: 20 },
   txId: { fontFamily: typography.fontMono, fontSize: 18, color: colors.textPrimary, fontWeight: '600' },
   button: { borderRadius: radius.full, padding: 18, alignItems: 'center', ...shadow.card },
-  buttonText: { fontFamily: typography.fontDisplay, fontSize: 18, fontWeight: '800', color: 'white' }
+  buttonText: { fontFamily: typography.fontDisplay, fontSize: 18, fontWeight: '800', color: 'white' },
+  skipButton: { borderRadius: radius.full, padding: 18, alignItems: 'center', ...shadow.card, borderWidth: 1, borderColor: colors.border2, backgroundColor: colors.bgCard, marginTop: spacing.md },
+  skipButtonText: { fontFamily: typography.fontDisplay, fontSize: 16, fontWeight: '800', color: colors.textSecondary }
 });
