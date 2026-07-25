@@ -2,10 +2,12 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import crypto from 'crypto';
+import { sendAadhaarOtp as extSendOtp, verifyAadhaarOtp as extVerifyOtp } from '../services/sandboxService';
+import { sendPushNotification } from '../services/pushService';
 
 // In-memory OTP cache for the Sandbox
-// Key: `aadhaar:${userId}`, Value: { otp, attempts, expiresAt }
-const otpCache = new Map<string, { otp: string; attempts: number; expiresAt: number }>();
+// Key: `aadhaar:${userId}`, Value: { clientId, aadhaarNumber, expiresAt, isMock, mockOtp }
+const otpCache = new Map<string, { clientId: string; aadhaarNumber: string; expiresAt: number; isMock: boolean; mockOtp?: string }>();
 
 export const initiateAadhaarKyc = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -19,32 +21,35 @@ export const initiateAadhaarKyc = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    // Store in mock Redis (Map) with 5 min TTL
+    // Call sandbox service to send OTP
+    const { clientId, isMock, mockOtp } = await extSendOtp(aadhaarNumber);
+
+    // Store in session cache with 5 min TTL
     otpCache.set(`aadhaar:${userId}`, {
-      otp,
-      attempts: 0,
-      expiresAt: Date.now() + 300 * 1000 // 300s
+      clientId,
+      aadhaarNumber,
+      expiresAt: Date.now() + 300 * 1000, // 300s
+      isMock,
+      mockOtp
     });
 
     const sessionId = crypto.randomUUID();
 
-    // DEV: return OTP in response body
     res.json({
       sessionId,
       message: 'OTP sent successfully',
-      ...(process.env.NODE_ENV !== 'production' && { otp })
+      // If it is mock mode, return mockOtp for development ease
+      ...(isMock && { otp: mockOtp })
     });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to initiate KYC' });
+  } catch (error: any) {
+    console.error('[Aadhaar Controller] Initiation error:', error.message || error);
+    res.status(500).json({ error: error.message || 'Failed to initiate KYC' });
   }
 };
 
 export const verifyAadhaarOtp = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { otp, aadhaarNumber } = req.body;
+    const { otp } = req.body;
     const userId = req.user?.id;
     if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
@@ -57,37 +62,45 @@ export const verifyAadhaarOtp = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    if (cached.attempts >= 3) {
-      // 15-min lockout logic would go here in a full Redis implementation
-      res.status(429).json({ error: 'Maximum attempts exceeded. Try again later.' });
-      return;
+    const { clientId, aadhaarNumber, isMock, mockOtp } = cached;
+    let dobToStore: Date | null = null;
+    let nameToStore: string | null = null;
+
+    if (isMock) {
+      // Verify mock OTP
+      if (mockOtp !== otp) {
+        res.status(400).json({ error: 'Invalid OTP' });
+        return;
+      }
+      nameToStore = 'TEST AADHAAR USER';
+    } else {
+      // Verify real OTP via Sandbox API
+      try {
+        const extResult = await extVerifyOtp(clientId, otp);
+        nameToStore = extResult.fullName;
+        if (extResult.dob) {
+          dobToStore = new Date(extResult.dob);
+        }
+      } catch (err: any) {
+        res.status(400).json({ error: err.message || 'Invalid OTP or verification failed' });
+        return;
+      }
     }
 
-    // Constant-time compare
-    const expectedBuffer = Buffer.from(cached.otp);
-    const providedBuffer = Buffer.from(String(otp).padStart(6, '0'));
-    
-    let isMatch = false;
-    if (expectedBuffer.length === providedBuffer.length) {
-      isMatch = crypto.timingSafeEqual(expectedBuffer, providedBuffer);
-    }
-
-    if (!isMatch) {
-      cached.attempts += 1;
-      otpCache.set(cacheKey, cached);
-      res.status(400).json({ error: 'Invalid OTP' });
-      return;
-    }
-
-    // Success
+    // Success: Update database
     await prisma.user.update({
       where: { id: userId },
-      data: { aadhaarStatus: 'VERIFIED' }
+      data: { 
+        aadhaarStatus: 'VERIFIED',
+        aadhaarNumber: aadhaarNumber || null,
+        ...(dobToStore && { dob: dobToStore }),
+        ...(nameToStore && { name: nameToStore })
+      }
     });
 
     otpCache.delete(cacheKey);
 
-    // Mock Push Notification emit
+    // Trigger Real-Time Notification (Socket.IO)
     const io = req.app.get('io');
     if (io) {
       io.to(`user:${userId}`).emit('notification:new', {
@@ -97,9 +110,17 @@ export const verifyAadhaarOtp = async (req: AuthRequest, res: Response): Promise
       });
     }
 
+    // Trigger Real-Time Push Notification (Expo/FCM)
+    try {
+      await sendPushNotification(userId, 'AADHAAR_VERIFIED', {});
+    } catch (e: any) {
+      console.error('[Aadhaar Controller] Push notification failed:', e.message || e);
+    }
+
     const maskedAadhaar = `XXXX XXXX ${String(aadhaarNumber).slice(-4)}`;
     res.json({ success: true, maskedAadhaar });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to verify KYC' });
+  } catch (error: any) {
+    console.error('[Aadhaar Controller] Verification error:', error.message || error);
+    res.status(500).json({ error: error.message || 'Failed to verify KYC' });
   }
 };

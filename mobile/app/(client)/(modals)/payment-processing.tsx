@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import RazorpayCheckout from 'react-native-razorpay';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '../../../src/services/apiClient';
+import { useAuthStore } from '../../../src/stores/authStore';
 
 export default function PaymentProcessing() {
   const router = useRouter();
@@ -16,43 +17,80 @@ export default function PaymentProcessing() {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
     const processPayment = async () => {
+      const currentUser = useAuthStore.getState().user;
+      const rateVal = parseFloat(rate || '1250');
+      let orderId = 'order_mock';
+      let rzpKey = 'rzp_test_mock';
+      let currencyVal = 'INR';
+
+      // 1. Fetch real Razorpay Order ID from backend
+      try {
+        console.log(`[Payment Processing] Creating payment order for Job ID: ${jobId}, Amount: ${rateVal}`);
+        const orderRes = await api.post('/payments/order', {
+          jobId,
+          amount: rateVal
+        });
+        
+        if (orderRes.data) {
+          orderId = orderRes.data.orderId || orderId;
+          rzpKey = orderRes.data.razorpayKeyId || rzpKey;
+          currencyVal = orderRes.data.currency || currencyVal;
+          console.log(`[Payment Processing] Real order created: ${orderId}`);
+        }
+      } catch (err: any) {
+        console.warn('[Payment Processing] Failed to create real order on backend. Using mock fallback.', err.message || err);
+      }
+
       const options = {
-        description: 'GigWork Payment',
-        currency: 'INR',
-        key: 'rzp_test_mock',
-        amount: rate ? (parseFloat(rate) * 100).toFixed(0) : '125000',
+        description: `Payment for Job #${jobId}`,
+        currency: currencyVal,
+        key: rzpKey,
+        amount: (rateVal * 100).toFixed(0),
         name: 'GigWork',
-        order_id: 'order_mock',
+        order_id: orderId,
         theme: { color: '#FF6B1A' }, // Spec: Razorpay SDK theme color #FF6B1A
-        prefill: { email: 'test@example.com', contact: '9999999999', name: 'Test User' }
+        prefill: {
+          email: currentUser?.email || 'test@example.com',
+          contact: currentUser?.phone || '9999999999',
+          name: currentUser?.name || 'Test User'
+        }
       };
 
       try {
-        await RazorpayCheckout.open(options);
-        // Call backend to confirm payment immediately
+        console.log('[Payment Processing] Opening Razorpay checkout checkout...');
+        const paymentResult = await RazorpayCheckout.open(options);
+        console.log('[Payment Processing] Checkout completed successfully:', paymentResult);
+
+        // 2. Call backend to confirm payment immediately
         await api.post('/payments/confirm', {
-          razorpayOrderId: 'order_mock',
-          razorpayPaymentId: 'pay_mock_' + Math.floor(Math.random() * 1000000),
-          razorpaySignature: 'sig_mock',
+          razorpayOrderId: paymentResult.razorpay_order_id || orderId,
+          razorpayPaymentId: paymentResult.razorpay_payment_id,
+          razorpaySignature: paymentResult.razorpay_signature,
           jobId
         });
+
         queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
         queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
         router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
-      } catch (e) {
-        // Fallback for Expo Go where native module might not be present
+      } catch (e: any) {
+        console.warn('[Payment Processing] Razorpay Native SDK failed or caught exception:', e.message || e);
+        
+        // Fallback simulation (e.g. inside Expo Go without development build)
+        console.log('[Payment Processing] Falling back to Simulated checkout...');
         try {
+          const mockPaymentId = 'pay_mock_' + Math.floor(Math.random() * 1000000);
           await api.post('/payments/confirm', {
-            razorpayOrderId: 'order_mock',
-            razorpayPaymentId: 'pay_mock_' + Math.floor(Math.random() * 1000000),
+            razorpayOrderId: orderId,
+            razorpayPaymentId: mockPaymentId,
             razorpaySignature: 'sig_mock',
             jobId
           });
           queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
           queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
         } catch (apiErr) {
-          console.error('Failed to confirm payment on fallback:', apiErr);
+          console.error('Failed to confirm simulated payment:', apiErr);
         }
+        
         setTimeout(() => {
           router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
         }, 1500);

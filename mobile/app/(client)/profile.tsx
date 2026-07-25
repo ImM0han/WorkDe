@@ -96,13 +96,18 @@ export default function ClientProfileScreen() {
 
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>{t('profile.help') || 'Help & Support'}</Text>
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push({ pathname: '/(client)/(modals)/coming-soon', params: { title: 'Help Center' } })}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(shared)/help')}>
           <Text style={styles.menuText}>{t('profile.helpCenter') || 'Help Center'}</Text>
           <Text style={styles.menuArrow}>→</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push({ pathname: '/(client)/(modals)/coming-soon', params: { title: 'Terms of Service' } })}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(shared)/terms')}>
           <Text style={styles.menuText}>{t('profile.termsOfService') || 'Terms of Service'}</Text>
+          <Text style={styles.menuArrow}>→</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(shared)/contact')}>
+          <Text style={styles.menuText}>{t('help.contact') || 'Contact Us'}</Text>
           <Text style={styles.menuArrow}>→</Text>
         </TouchableOpacity>
 

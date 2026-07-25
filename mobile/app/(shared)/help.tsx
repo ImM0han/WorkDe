@@ -26,7 +26,7 @@ export default function HelpSupportScreen() {
   };
 
   const contactSupport = () => {
-    Linking.openURL('mailto:support@gigwork.com');
+    Linking.openURL('mailto:wrkup.app@gmail.com');
   };
 
   return (
@@ -49,7 +49,7 @@ export default function HelpSupportScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
-        
+
         {FAQS.map(faq => (
           <View key={faq.id} style={styles.accordionContainer}>
             <TouchableOpacity style={styles.accordionHeader} onPress={() => toggleAccordion(faq.id)}>

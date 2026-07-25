@@ -5,6 +5,8 @@ import { bucket } from '../services/firebase';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { haversineDistance } from '../utils/haversine';
+import { sendAadhaarOtp as extSendOtp, verifyAadhaarOtp as extVerifyOtp } from '../services/sandboxService';
+import { sendPushNotification } from '../services/pushService';
 
 const DEFAULT_RADIUS = process.env.MAX_DISTANCE_KM 
   ? process.env.MAX_DISTANCE_KM 
@@ -70,7 +72,7 @@ export const uploadCertificate = async (req: AuthRequest, res: Response): Promis
   }
 };
 
-// Simple mock for Aadhaar KYC (Sandbox)
+// Aadhaar KYC OTP Cache
 const otpStore = new Map<string, string>(); // In prod, use Redis
 
 export const initiateAadhaar = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -78,28 +80,44 @@ export const initiateAadhaar = async (req: AuthRequest, res: Response): Promise<
     const partnerId = req.user?.partnerId;
     const { aadhaar, dob } = req.body;
 
-    if (!partnerId || aadhaar?.length !== 12) {
-      res.status(400).json({ error: 'Invalid Aadhaar' });
+    if (!partnerId || !/^[2-9]\d{11}$/.test(aadhaar)) {
+      res.status(400).json({ error: 'Invalid 12-digit Aadhaar number' });
       return;
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Call sandbox service to send OTP
+    const { clientId, isMock, mockOtp } = await extSendOtp(aadhaar);
     const sessionId = uuidv4();
-    otpStore.set(`aadhaar:${sessionId}`, JSON.stringify({ otp, aadhaar, dob }));
 
-    res.json({ sessionId, message: 'OTP sent', otp }); // Expose OTP for dev
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to initiate KYC' });
+    // Cache the session data
+    otpStore.set(`aadhaar:${sessionId}`, JSON.stringify({ 
+      clientId, 
+      aadhaar, 
+      dob,
+      isMock,
+      mockOtp
+    }));
+
+    res.json({
+      sessionId,
+      message: 'OTP sent successfully',
+      // If it is mock mode, return mockOtp for development ease
+      ...(isMock && { otp: mockOtp })
+    });
+  } catch (error: any) {
+    console.error('[Aadhaar Partner KYC] Initiation error:', error.message || error);
+    res.status(500).json({ error: error.message || 'Failed to initiate KYC' });
   }
 };
 
 export const verifyAadhaar = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const partnerId = req.user?.partnerId;
+    const userId = req.user?.id;
     const { sessionId, otp } = req.body;
 
-    if (!partnerId) {
-      res.status(400).json({ error: 'Partner not found' });
+    if (!partnerId || !userId) {
+      res.status(400).json({ error: 'Partner or User not found' });
       return;
     }
 
@@ -109,38 +127,68 @@ export const verifyAadhaar = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    let storedOtp = '';
-    let aadhaar = '';
-    let dob = '';
-    try {
-      const parsed = JSON.parse(storedDataStr);
-      storedOtp = parsed.otp;
-      aadhaar = parsed.aadhaar;
-      dob = parsed.dob;
-    } catch (e) {
-      storedOtp = storedDataStr;
-    }
-    
-    // Constant time compare
-    if (!storedOtp || !crypto.timingSafeEqual(Buffer.from(storedOtp), Buffer.from(otp))) {
-      res.status(400).json({ error: 'Invalid OTP' });
-      return;
+    const parsed = JSON.parse(storedDataStr);
+    const { clientId, aadhaar, dob, isMock, mockOtp } = parsed;
+
+    let dobToStore: Date | null = dob ? new Date(dob) : null;
+    let nameToStore: string | null = null;
+
+    if (isMock) {
+      // Verify mock OTP
+      if (mockOtp !== otp) {
+        res.status(400).json({ error: 'Invalid OTP' });
+        return;
+      }
+      nameToStore = 'TEST AADHAAR USER';
+    } else {
+      // Verify real OTP via Sandbox API
+      try {
+        const extResult = await extVerifyOtp(clientId, otp);
+        nameToStore = extResult.fullName;
+        if (extResult.dob) {
+          dobToStore = new Date(extResult.dob);
+        }
+      } catch (err: any) {
+        res.status(400).json({ error: err.message || 'Invalid OTP or verification failed' });
+        return;
+      }
     }
 
+    // Success: Update database
     await (prisma.user as any).update({
-      where: { id: req.user?.id },
+      where: { id: userId },
       data: { 
         aadhaarStatus: 'VERIFIED',
         aadhaarNumber: aadhaar || null,
-        dob: dob ? new Date(dob) : null
+        dob: dobToStore,
+        // Update user's name to match Aadhaar name if available
+        ...(nameToStore && { name: nameToStore })
       }
     });
 
     otpStore.delete(`aadhaar:${sessionId}`);
 
+    // Trigger Real-Time Notification (Socket.IO)
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${userId}`).emit('notification:new', {
+        type: 'AADHAAR_VERIFIED',
+        title: 'Aadhaar Verified ✅',
+        body: 'Your profile is now verified!'
+      });
+    }
+
+    // Trigger Real-Time Push Notification (Expo/FCM)
+    try {
+      await sendPushNotification(userId, 'AADHAAR_VERIFIED', {});
+    } catch (e: any) {
+      console.error('[Aadhaar Partner KYC] Push notification failed:', e.message || e);
+    }
+
     res.json({ success: true, aadhaarStatus: 'VERIFIED' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to verify KYC' });
+  } catch (error: any) {
+    console.error('[Aadhaar Partner KYC] Verification error:', error.message || error);
+    res.status(500).json({ error: error.message || 'Failed to verify KYC' });
   }
 };
 

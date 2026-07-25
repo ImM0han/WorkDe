@@ -15,6 +15,9 @@ import { initI18n } from '../src/i18n';
 import '../src/i18n';
 import { useAuthStore } from '../src/stores/authStore';
 import { useLanguageStore } from '../src/i18n/languageStore';
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+import api from '../src/services/apiClient';
 
 import { TiroDevanagariHindi_400Regular } from '@expo-google-fonts/tiro-devanagari-hindi';
 import { HindSiliguri_400Regular } from '@expo-google-fonts/hind-siliguri';
@@ -211,6 +214,56 @@ export default function RootLayout() {
       socket.off('payment:received');
     };
   }, [socket, queryClient, router]);
+  // Push Notification Registration Helper
+  const registerForPushNotifications = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+      }
+
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        console.log('[Push Notification] Permission not granted.');
+        return;
+      }
+
+      const projectId = Constants?.expoConfig?.extra?.eas?.projectId || 
+                        Constants?.easConfig?.projectId;
+      
+      const token = (await Notifications.getExpoPushTokenAsync({
+        projectId
+      })).data;
+
+      console.log('[Push Notification] Expo token retrieved:', token);
+      return token;
+    } catch (e: any) {
+      console.warn('[Push Notification] Error registering push notifications:', e.message || e);
+    }
+  };
+
+  const { user } = useAuthStore();
+
+  useEffect(() => {
+    if (user) {
+      registerForPushNotifications().then(token => {
+        if (token) {
+          api.put('/auth/profile', { pushToken: token })
+            .then(() => console.log('[Push Notification] Registered push token on backend.'))
+            .catch(err => console.error('[Push Notification] Failed to sync push token with backend:', err));
+        }
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     if (fontsLoaded && i18nReady && authHydrated && langHydrated) {

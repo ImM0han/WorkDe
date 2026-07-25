@@ -313,15 +313,20 @@ export const me = async (req: any, res: Response) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
-
 export const updateProfile = async (req: any, res: Response) => {
   try {
-    const { name, email, avatarUrl, gender } = req.body;
+    const { name, email, avatarUrl, gender, pushToken } = req.body;
     const userId = req.user.id;
 
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { name, email, avatarUrl, gender },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(email !== undefined && { email }),
+        ...(avatarUrl !== undefined && { avatarUrl }),
+        ...(gender !== undefined && { gender }),
+        ...(pushToken !== undefined && { pushToken })
+      },
       include: { partner: true }
     });
 
