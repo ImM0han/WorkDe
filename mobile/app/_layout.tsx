@@ -123,14 +123,71 @@ export default function RootLayout() {
   const responseListener = useRef<Notifications.EventSubscription | undefined>(undefined);
 
   useEffect(() => {
+    // 1. Listen for foreground notifications and add them to standard notification state
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      // Logic for unread badge could go here
+      const { title, body, data } = notification.request.content;
+      try {
+        const { useNotificationStore } = require('../src/store/notificationStore');
+        useNotificationStore.getState().addNotification({
+          id: notification.request.identifier,
+          type: data?.type || 'GENERAL',
+          title: title || 'New Notification',
+          body: body || '',
+          isRead: false,
+          createdAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('[Notification Listener] Failed to update store:', err);
+      }
     });
 
+    // 2. Listen for notification response (taps) and route to correct screen
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
-      if (data?.type === 'NEW_JOB') {
-        router.push('/(partner)'); // or appropriate path
+      if (!data) return;
+
+      const role = useAuthStore.getState().user?.role;
+      const jobId = data.jobId as string | undefined;
+      const pushType = data.type as string | undefined;
+
+      console.log(`[Notification Response] Tapped push of type: ${pushType}, jobId: ${jobId}, userRole: ${role}`);
+
+      switch (pushType) {
+        case 'NEW_JOB':
+          if (role === 'PARTNER' && jobId) {
+            router.push({ pathname: '/(partner)/(modals)/job-detail', params: { id: jobId } });
+          }
+          break;
+        case 'WORKER_JOINED':
+        case 'JOB_FILLED':
+        case 'JOB_ACCEPTED':
+        case 'JOB_COMPLETED':
+        case 'JOB_START_REQUESTED':
+          if (role === 'CLIENT' && jobId) {
+            router.push({ pathname: '/(client)/(modals)/job-detail', params: { id: jobId } });
+          }
+          break;
+        case 'EXTENSION_REQUESTED':
+          if (jobId) {
+            if (role === 'CLIENT') {
+              router.push({ pathname: '/(client)/(modals)/job-detail', params: { id: jobId } });
+            } else if (role === 'PARTNER') {
+              router.push({ pathname: '/(partner)/(modals)/job-detail', params: { id: jobId } });
+            }
+          }
+          break;
+        case 'PAYMENT_RECEIVED':
+          if (role === 'PARTNER') {
+            router.push({ pathname: '/(partner)/(modals)/wallet' });
+          }
+          break;
+        case 'AADHAAR_VERIFIED':
+          if (role === 'PARTNER') {
+            router.push('/(partner)/profile');
+          }
+          break;
+        default:
+          break;
       }
     });
 
@@ -222,7 +279,7 @@ export default function RootLayout() {
           name: 'default',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#FF231F7C',
+          lightColor: '#FF6B1A',
         });
       }
 

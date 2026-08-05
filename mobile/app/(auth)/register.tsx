@@ -7,6 +7,8 @@ import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
+import auth from '../../src/services/firebaseAuth';
+import * as SecureStore from 'expo-secure-store';
 
 export default function RegisterStartScreen() {
   const [phone, setPhone] = useState('');
@@ -25,6 +27,7 @@ export default function RegisterStartScreen() {
     
     setLoading(true);
     try {
+      // 1. Verify availability and validate role on backend first
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -32,17 +35,25 @@ export default function RegisterStartScreen() {
       });
       const data = await res.json();
       
-      if (!res.ok) throw new Error(data.error || 'Failed to send OTP');
+      if (!res.ok) throw new Error(data.error || 'Failed to initiate registration');
       
       if (data.isExistingUser) {
         Toast.show({ type: 'error', text1: 'Account already exists', text2: 'Please log in instead' });
         router.push('/(auth)/login');
         return;
       }
+
+      // 2. Trigger real Firebase SMS OTP
+      const formattedPhone = `+91${phone}`;
+      console.log(`[Register] Requesting Firebase OTP for: ${formattedPhone}`);
+      const confirmation = await auth().signInWithPhoneNumber(formattedPhone);
+
+      // 3. Securely store verificationId
+      await SecureStore.setItemAsync('firebase_verification_id', confirmation.verificationId);
       
       setPendingAuth({
-        phone: `+91${phone}`,
-        sessionId: data.sessionInfo,
+        phone: formattedPhone,
+        sessionId: '', // sessionInfo is deprecated with Firebase
         isExistingUser: false,
         password: password
       });
@@ -51,7 +62,7 @@ export default function RegisterStartScreen() {
       
       router.push({
         pathname: '/(auth)/otp-verify',
-        params: { sessionInfo: data.sessionInfo, phone: `+91${phone}`, mode: 'register' }
+        params: { phone: formattedPhone, mode: 'register' }
       });
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });

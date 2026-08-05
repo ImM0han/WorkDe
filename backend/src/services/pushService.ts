@@ -1,15 +1,27 @@
-import * as admin from 'firebase-admin';
+import { Expo } from 'expo-server-sdk';
 import { prisma } from '../utils/prisma';
 
-export type PushType = 'WORKER_JOINED' | 'JOB_FILLED' | 'JOB_ACCEPTED' | 'JOB_COMPLETED' | 'NEW_JOB' | 'AADHAAR_VERIFIED' | 'PAYMENT_RECEIVED';
+const expo = new Expo();
+
+export type PushType = 
+  | 'WORKER_JOINED' 
+  | 'JOB_FILLED' 
+  | 'JOB_ACCEPTED' 
+  | 'JOB_COMPLETED' 
+  | 'NEW_JOB' 
+  | 'AADHAAR_VERIFIED' 
+  | 'PAYMENT_RECEIVED'
+  | 'EXTENSION_REQUESTED';
 
 export const PUSH_TEMPLATES: Record<string, { title: string, body: (d: any) => string }> = {
   WORKER_JOINED: { title: 'Worker confirmed! 👷', body: (d) => `${d.count} of ${d.total} workers confirmed` },
   JOB_FILLED:    { title: 'All workers confirmed! 🎉', body: (d) => `Your ${d.category} job is fully staffed` },
   JOB_ACCEPTED:  { title: 'Job Accepted', body: (d) => `${d.partnerName} accepted your job.` },
   JOB_COMPLETED: { title: 'Job Completed', body: (_) => `Your job has been completed.` },
+  NEW_JOB:       { title: 'New Job Posted! 📍', body: (d) => `A new ${d.category} job is available near you.` },
   AADHAAR_VERIFIED: { title: 'Aadhaar Verified ✅', body: (_) => 'Your profile is now verified!' },
-  PAYMENT_RECEIVED: { title: 'Payment Received 💰', body: (d) => `You received a payment of ₹${d.amount}.` }
+  PAYMENT_RECEIVED: { title: 'Payment Received 💰', body: (d) => `You received a payment of ₹${d.amount}.` },
+  EXTENSION_REQUESTED: { title: 'Extension Requested ⏳', body: (_) => 'An extension has been requested for your job.' }
 };
 
 export const sendPushNotification = async (userId: string, type: PushType | string, payload: any) => {
@@ -27,8 +39,14 @@ export const sendPushNotification = async (userId: string, type: PushType | stri
     }
 
     const token = user.pushToken.trim();
-    
-    // Resolve notification title and body
+
+    // Verify token format using Expo SDK helper
+    if (!Expo.isExpoPushToken(token)) {
+      console.log(`[Push Service] Invalid Expo push token: ${token}. Skipping silently.`);
+      return;
+    }
+
+    // Resolve title and body from templates
     let title = 'New Notification';
     let body = 'You have a new update in GigWork.';
 
@@ -37,72 +55,38 @@ export const sendPushNotification = async (userId: string, type: PushType | stri
       body = PUSH_TEMPLATES[type].body(payload || {});
     }
 
-    // 1. Dual Mode Routing: Expo Push Notifications (starts with "ExponentPushToken[")
-    if (token.startsWith('ExponentPushToken[')) {
-      console.log(`[Push Service] Routing push to Expo Service: ${token}`);
-      const response = await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'accept': 'application/json',
-          'accept-encoding': 'gzip, deflate'
-        },
-        body: JSON.stringify({
-          to: token,
-          sound: 'default',
-          title,
-          body,
-          data: { type, payload }
-        })
-      });
+    const messages = [{
+      to: token,
+      sound: 'default' as const,
+      title,
+      body,
+      data: { type, jobId: payload?.jobId || '' }
+    }];
 
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error(`[Push Service] Expo API responded with error: ${errText}`);
-      } else {
-        const result = await response.json();
-        console.log('[Push Service] Expo push notification sent successfully:', result);
-      }
-    } else {
-      // 2. Dual Mode Routing: Native Firebase Cloud Messaging (FCM)
-      console.log(`[Push Service] Routing push to FCM: ${token}`);
-      
-      // Ensure firebase is initialized
-      if (!admin.apps.length) {
-        console.warn('[Push Service] Firebase Admin SDK is not initialized. Cannot send FCM push.');
-        return;
-      }
-
-      const message: admin.messaging.Message = {
-        token,
-        notification: {
-          title,
-          body
-        },
-        data: {
-          type,
-          payload: JSON.stringify(payload || {})
-        },
-        android: {
-          priority: 'high',
-          notification: {
-            sound: 'default'
-          }
-        },
-        apns: {
-          payload: {
-            aps: {
-              sound: 'default'
+    const chunks = expo.chunkPushNotifications(messages);
+    for (const chunk of chunks) {
+      try {
+        const tickets = await expo.sendPushNotificationsAsync(chunk);
+        for (const ticket of tickets) {
+          if (ticket.status === 'error') {
+            console.error(`[Push Service] Expo ticket error: ${ticket.message}`);
+            // If the device is not registered, clear token from the database
+            if (ticket.details && ticket.details.error === 'DeviceNotRegistered') {
+              await prisma.user.update({
+                where: { id: userId },
+                data: { pushToken: null }
+              });
+              console.log(`[Push Service] Cleared unregistered push token for User ID ${userId}`);
             }
+          } else {
+            console.log('[Push Service] Push notification sent successfully, ticket:', ticket);
           }
         }
-      };
-
-      const result = await admin.messaging().send(message);
-      console.log('[Push Service] FCM notification sent successfully:', result);
+      } catch (error) {
+        console.error('[Push Service] Error sending push chunk:', error);
+      }
     }
   } catch (error: any) {
     console.error(`[Push Service] Failed to send push notification to ${userId}:`, error.message || error);
   }
 };
-

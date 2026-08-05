@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -37,6 +37,10 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { notifications, markAsRead, removeNotification, markAllAsRead } = useNotificationStore();
   const [filter, setFilter] = useState<'All' | 'Jobs' | 'Payments' | 'KYC'>('All');
+
+  useEffect(() => {
+    markAllAsRead();
+  }, []);
 
   const filtered = notifications.filter(n => {
     if (filter === 'All') return true;

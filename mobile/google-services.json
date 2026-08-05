@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "847778728121",
+    "project_id": "wrkup-e32bc",
+    "storage_bucket": "wrkup-e32bc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:847778728121:android:6fa3af9e7c21995f693368",
+        "android_client_info": {
+          "package_name": "com.gigwork.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNOPjfxr6b4mgJT146ga9_Jf-yd0BU4ls"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -6,9 +6,11 @@ import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
+import auth from '../../src/services/firebaseAuth';
+import * as SecureStore from 'expo-secure-store';
 
 export default function OTPVerifyScreen() {
-  const { sessionInfo, phone, mode } = useLocalSearchParams<{ sessionInfo: string, phone: string, mode?: string }>();
+  const { phone, mode } = useLocalSearchParams<{ phone: string, mode?: string }>();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(60);
@@ -44,14 +46,30 @@ export default function OTPVerifyScreen() {
 
     setLoading(true);
     try {
+      // 1. Retrieve the saved Firebase verificationId
+      const verificationId = await SecureStore.getItemAsync('firebase_verification_id');
+      if (!verificationId) {
+        throw new Error('Verification session has expired. Please request a new OTP.');
+      }
+
+      // 2. Perform real SMS OTP verification with Firebase Auth SDK
+      console.log('[OTP Verify] Verifying OTP credential with Firebase...');
+      const credential = auth.PhoneAuthProvider.credential(verificationId, otpString);
+      const userCredential = await auth().signInWithCredential(credential);
+      
+      // 4. Retrieve the Firebase ID Token
+      const idToken = await userCredential.user.getIdToken();
+      console.log('[OTP Verify] Firebase ID token retrieved. Exchanging for app JWT...');
+
+      // 5. Send only the Firebase ID Token to our backend
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionInfo, phone, otp: otpString, role })
+        body: JSON.stringify({ idToken, role })
       });
       const data = await res.json();
       
-      if (!res.ok) throw new Error(data.error || 'Invalid OTP');
+      if (!res.ok) throw new Error(data.error || 'Backend verification failed');
       
       if (mode === 'register') {
         // Automatically set password using the password stored during the register step
@@ -78,11 +96,11 @@ export default function OTPVerifyScreen() {
       } else {
         await setUser(data.user, data.token);
         clearPendingAuth();
-        if (role === 'PARTNER') router.replace('/(partner)/');
-        else router.replace('/(client)/');
+        if (role === 'PARTNER') router.replace('/(partner)');
+        else router.replace('/(client)');
       }
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
+      Toast.show({ type: 'error', text1: 'Verification Failed', text2: getFriendlyErrorMessage(err) });
     } finally {
       setLoading(false);
     }
@@ -91,8 +109,17 @@ export default function OTPVerifyScreen() {
   const handleResend = async () => {
     if (timer > 0) return;
     setTimer(60);
-    // Call send-otp again logic here in a real app
-    Toast.show({ type: 'success', text1: 'OTP Resent' });
+    
+    try {
+      console.log(`[OTP Verify] Resending Firebase OTP to: ${phone}`);
+      if (!phone) throw new Error('Phone number is missing');
+      
+      const confirmation = await auth().signInWithPhoneNumber(phone);
+      await SecureStore.setItemAsync('firebase_verification_id', confirmation.verificationId);
+      Toast.show({ type: 'success', text1: 'OTP Resent successfully' });
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Resend Failed', text2: getFriendlyErrorMessage(e) });
+    }
   };
 
   return (
@@ -114,7 +141,7 @@ export default function OTPVerifyScreen() {
           {otp.map((digit, index) => (
             <TextInput
               key={index}
-              ref={ref => inputs.current[index] = ref}
+              ref={ref => { inputs.current[index] = ref; }}
               style={[
                 styles.otpInput,
                 digit ? styles.otpInputFilled : null

@@ -7,6 +7,8 @@ import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
+import auth from '../../src/services/firebaseAuth';
+import * as SecureStore from 'expo-secure-store';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
@@ -32,8 +34,8 @@ export default function LoginScreen() {
       await setUser(data.user, data.token);
       Toast.show({ type: 'success', text1: 'Logged in successfully' });
       
-      if (data.user.role === 'PARTNER') router.replace('/(partner)/');
-      else router.replace('/(client)/');
+      if (data.user.role === 'PARTNER') router.replace('/(partner)');
+      else router.replace('/(client)');
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
     } finally {
@@ -49,6 +51,8 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
+      
+      // 1. Verify that the account exists on backend first
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,16 +62,24 @@ export default function LoginScreen() {
       
       if (!res.ok) throw new Error(data.error);
 
+      // 2. Trigger real Firebase SMS OTP
+      const formattedPhone = `+91${phone}`;
+      console.log(`[Forgot Password] Requesting Firebase OTP for: ${formattedPhone}`);
+      const confirmation = await auth().signInWithPhoneNumber(formattedPhone);
+
+      // 3. Save verificationId in secure store
+      await SecureStore.setItemAsync('firebase_verification_id', confirmation.verificationId);
+
       setPendingAuth({
-        phone: `+91${phone}`,
-        sessionId: data.sessionInfo,
+        phone: formattedPhone,
+        sessionId: '', // deprecated
         isExistingUser: true
       });
 
       Toast.show({ type: 'success', text1: 'OTP Sent for Password Reset' });
       router.push({
         pathname: '/(auth)/otp-verify',
-        params: { sessionInfo: data.sessionInfo, phone: `+91${phone}`, mode: 'forgot' }
+        params: { phone: formattedPhone, mode: 'forgot' }
       });
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });

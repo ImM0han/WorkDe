@@ -52,8 +52,8 @@ export default function CompleteProfileScreen() {
       await setUser(data.user, data.token);
       Toast.show({ type: 'success', text1: 'Account created successfully!' });
       
-      if (role === 'PARTNER') router.replace('/(partner)/');
-      else router.replace('/(client)/');
+      if (role === 'PARTNER') router.replace('/(partner)');
+      else router.replace('/(client)');
 
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });

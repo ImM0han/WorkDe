@@ -175,10 +175,13 @@ export const acceptJob = async (req: AuthRequest, res: Response): Promise<void> 
     try {
       const { sendPushNotification } = await import('../services/pushService');
       if (partner) {
+        // Send JOB_ACCEPTED event to client
+        await sendPushNotification((updatedJob as any).clientId, 'JOB_ACCEPTED', { jobId, partnerName: partner.user.name });
+
         if (isFilled) {
-          await sendPushNotification((updatedJob as any).clientId, 'JOB_FILLED', { category: (updatedJob as any).category });
+          await sendPushNotification((updatedJob as any).clientId, 'JOB_FILLED', { jobId, category: (updatedJob as any).category });
         } else {
-          await sendPushNotification((updatedJob as any).clientId, 'WORKER_JOINED', { count: (updatedJob as any).acceptedCount, total: (updatedJob as any).workerCount });
+          await sendPushNotification((updatedJob as any).clientId, 'WORKER_JOINED', { jobId, count: (updatedJob as any).acceptedCount, total: (updatedJob as any).workerCount });
         }
       }
     } catch (e) {}
@@ -406,6 +409,16 @@ export const createJob = async (req: AuthRequest, res: Response): Promise<void> 
           });
         }
       }
+
+      // Send real push notification to nearby matched partners
+      try {
+        const { sendPushNotification } = await import('../services/pushService');
+        for (const partner of matchedPartners) {
+          await sendPushNotification(partner.userId, 'NEW_JOB', { jobId: newJob.id, category: newJob.category });
+        }
+      } catch (pushErr) {
+        console.error('[createJob] Push notification loop failed:', pushErr);
+      }
     }
 
     res.status(201).json(newJob);
@@ -501,6 +514,24 @@ export const extendJob = async (req: AuthRequest, res: Response): Promise<void> 
       } else if (role === 'PARTNER') {
         io.to(`user:${updatedJob.clientId}`).emit('extension:request', { jobId: updatedJob.id, extraHours });
       }
+    }
+
+    // Trigger Real-Time Push Notification for Extension Request
+    try {
+      const { sendPushNotification } = await import('../services/pushService');
+      if (role === 'CLIENT' && updatedJob.partnerId) {
+        const partnerRecord = await prisma.partner.findUnique({
+          where: { id: updatedJob.partnerId },
+          select: { userId: true }
+        });
+        if (partnerRecord) {
+          await sendPushNotification(partnerRecord.userId, 'EXTENSION_REQUESTED', { jobId: updatedJob.id });
+        }
+      } else if (role === 'PARTNER') {
+        await sendPushNotification(updatedJob.clientId, 'EXTENSION_REQUESTED', { jobId: updatedJob.id });
+      }
+    } catch (pushErr) {
+      console.error('[extendJob] Push notification trigger failed:', pushErr);
     }
 
     res.json(updatedJob);

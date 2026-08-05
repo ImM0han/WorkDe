@@ -2,9 +2,11 @@ import { Tabs, useRouter } from 'expo-router';
 import { Platform, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
+import { useNotificationStore } from '../../src/store/notificationStore';
 
 export default function PartnerLayout() {
   const router = useRouter();
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
 
   return (
     <Tabs
@@ -73,7 +75,9 @@ export default function PartnerLayout() {
         name="notifications" 
         options={{ 
           title: 'Alerts',
-          tabBarIcon: ({ color }) => <Feather name="bell" size={24} color={color} />
+          tabBarIcon: ({ color }) => <Feather name="bell" size={24} color={color} />,
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: '#FF6B1A', color: 'white' }
         }} 
       />
       <Tabs.Screen 

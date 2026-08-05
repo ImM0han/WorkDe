@@ -3,14 +3,13 @@ import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { checkLoginLockout, recordFailedAttempt, clearAttempts } from '../middleware/rateLimiter';
+import admin from '../lib/firebase';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_min_32_chars';
 const OTP_TOKEN_SECRET = process.env.OTP_TOKEN_SECRET || 'your_separate_otp_jwt_secret_32chars_min';
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12');
 
-const mockOtpStore = new Map<string, string>();
-const forgotPwdStore = new Map<string, string>();
 
 export const sendOtp = async (req: Request, res: Response) => {
   try {
@@ -28,15 +27,7 @@ export const sendOtp = async (req: Request, res: Response) => {
 
     const isExistingUser = !!user;
 
-    const sessionInfo = Math.random().toString(36).substring(2, 15);
-    const mockOtp = '123456'; 
-    mockOtpStore.set(sessionInfo, mockOtp);
-    
-    setTimeout(() => {
-      console.log(`[MOCK SMS] OTP for ${phone} is ${mockOtp}. Session: ${sessionInfo}`);
-    }, 500);
-
-    return res.status(200).json({ sessionInfo, isExistingUser, message: 'OTP sent successfully' });
+    return res.status(200).json({ isExistingUser, message: 'OTP verification flow ready' });
   } catch (error) {
     console.error('Send OTP error:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -45,18 +36,27 @@ export const sendOtp = async (req: Request, res: Response) => {
 
 export const verifyOtp = async (req: Request, res: Response) => {
   try {
-    const { sessionInfo, otp, role, phone: bodyPhone } = req.body;
-    if (!sessionInfo || !otp) return res.status(400).json({ error: 'Missing parameters' });
+    const { idToken, role } = req.body;
+    if (!idToken) return res.status(400).json({ error: 'ID token is required' });
 
-    const storedOtp = mockOtpStore.get(sessionInfo) || forgotPwdStore.get(sessionInfo);
-    if (!storedOtp || storedOtp !== otp) {
-      return res.status(400).json({ error: 'Invalid or expired OTP' });
+    let decodedToken;
+    if (process.env.NODE_ENV !== 'production' && idToken.startsWith('mock-firebase-id-token:')) {
+      const parts = idToken.split(':');
+      decodedToken = { phone_number: parts[1] };
+      console.log(`[MOCK BYPASS] Successfully bypassed Firebase verifyIdToken for phone: ${parts[1]}`);
+    } else {
+      try {
+        decodedToken = await admin.auth().verifyIdToken(idToken);
+      } catch (e: any) {
+        console.error('Firebase verifyIdToken error:', e.message || e);
+        return res.status(400).json({ error: 'Invalid or expired Firebase verification token' });
+      }
     }
 
-    mockOtpStore.delete(sessionInfo);
-    forgotPwdStore.delete(sessionInfo);
-
-    const phone = bodyPhone || '+910000000000'; // For mock since we didn't store it
+    const phone = decodedToken.phone_number;
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number could not be extracted from verification token' });
+    }
 
     let user = await prisma.user.findUnique({ where: { phone }, include: { partner: true } });
     
@@ -183,22 +183,18 @@ export const forgotPassword = async (req: Request, res: Response) => {
     if (!phone) return res.status(400).json({ error: 'Phone number is required' });
 
     const user = await prisma.user.findUnique({ where: { phone } });
-    if (user && role && user.role !== role.toUpperCase()) {
+    if (!user) {
+      return res.status(404).json({ error: 'Account does not exist. Please register first.' });
+    }
+
+    if (role && user.role !== role.toUpperCase()) {
       const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
       return res.status(400).json({ 
         error: `This number is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
       });
     }
 
-    const sessionInfo = Math.random().toString(36).substring(2, 15);
-    const mockOtp = '123456'; 
-    forgotPwdStore.set(sessionInfo, mockOtp);
-    
-    setTimeout(() => {
-      console.log(`[MOCK FORGOT SMS] OTP for ${phone} is ${mockOtp}. Session: ${sessionInfo}`);
-    }, 500);
-
-    return res.status(200).json({ sessionInfo, message: 'OTP sent' });
+    return res.status(200).json({ message: 'User verification successful' });
   } catch (error) {
     return res.status(500).json({ error: 'Internal error' });
   }

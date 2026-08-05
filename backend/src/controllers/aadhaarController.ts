@@ -112,7 +112,7 @@ export const verifyAadhaarOtp = async (req: AuthRequest, res: Response): Promise
 
     // Trigger Real-Time Push Notification (Expo/FCM)
     try {
-      await sendPushNotification(userId, 'AADHAAR_VERIFIED', {});
+      await sendPushNotification(userId, 'AADHAAR_VERIFIED', { jobId: '' });
     } catch (e: any) {
       console.error('[Aadhaar Controller] Push notification failed:', e.message || e);
     }

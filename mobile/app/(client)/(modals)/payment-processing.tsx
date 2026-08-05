@@ -18,27 +18,40 @@ export default function PaymentProcessing() {
 
     const processPayment = async () => {
       const currentUser = useAuthStore.getState().user;
-      const rateVal = parseFloat(rate || '1250');
-      let orderId = 'order_mock';
-      let rzpKey = 'rzp_test_mock';
+      const rateVal = parseFloat(rate || '0');
+
+      if (!jobId || rateVal <= 0) {
+        router.replace({
+          pathname: '/(client)/(modals)/payment-failed',
+          params: { error: 'Invalid Job ID or payment amount' }
+        });
+        return;
+      }
+
+      let orderId = '';
+      let rzpKey = '';
       let currencyVal = 'INR';
 
       // 1. Fetch real Razorpay Order ID from backend
       try {
-        console.log(`[Payment Processing] Creating payment order for Job ID: ${jobId}, Amount: ${rateVal}`);
-        const orderRes = await api.post('/payments/order', {
+        console.log(`[Payment Processing] Requesting Razorpay order for Job ID: ${jobId}, Amount: ${rateVal}`);
+        const orderRes = await api.post('/payments/initiate', {
           jobId,
           amount: rateVal
         });
         
         if (orderRes.data) {
-          orderId = orderRes.data.orderId || orderId;
-          rzpKey = orderRes.data.razorpayKeyId || rzpKey;
+          orderId = orderRes.data.orderId;
+          rzpKey = orderRes.data.razorpayKeyId;
           currencyVal = orderRes.data.currency || currencyVal;
-          console.log(`[Payment Processing] Real order created: ${orderId}`);
         }
       } catch (err: any) {
-        console.warn('[Payment Processing] Failed to create real order on backend. Using mock fallback.', err.message || err);
+        console.error('[Payment Processing] Failed to create order on server:', err.response?.data?.error || err.message);
+        router.replace({
+          pathname: '/(client)/(modals)/payment-failed',
+          params: { error: err.response?.data?.error || 'Failed to initiate payment on server' }
+        });
+        return;
       }
 
       const options = {
@@ -57,9 +70,9 @@ export default function PaymentProcessing() {
       };
 
       try {
-        console.log('[Payment Processing] Opening Razorpay checkout checkout...');
+        console.log('[Payment Processing] Opening Razorpay checkout SDK...');
         const paymentResult = await RazorpayCheckout.open(options);
-        console.log('[Payment Processing] Checkout completed successfully:', paymentResult);
+        console.log('[Payment Processing] Razorpay checkout success:', paymentResult);
 
         // 2. Call backend to confirm payment immediately
         await api.post('/payments/confirm', {
@@ -73,27 +86,24 @@ export default function PaymentProcessing() {
         queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
         router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
       } catch (e: any) {
-        console.warn('[Payment Processing] Razorpay Native SDK failed or caught exception:', e.message || e);
+        console.warn('[Payment Processing] Razorpay Checkout error or cancellation:', e);
         
-        // Fallback simulation (e.g. inside Expo Go without development build)
-        console.log('[Payment Processing] Falling back to Simulated checkout...');
-        try {
-          const mockPaymentId = 'pay_mock_' + Math.floor(Math.random() * 1000000);
-          await api.post('/payments/confirm', {
-            razorpayOrderId: orderId,
-            razorpayPaymentId: mockPaymentId,
-            razorpaySignature: 'sig_mock',
-            jobId
+        // Check if the user cancelled the payment
+        if (e.code === 2 || (e.description && e.description.toLowerCase().includes('cancelled'))) {
+          console.log('[Payment Processing] Payment cancelled by user. Returning back.');
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(client)');
+          }
+        } else {
+          // On any other failure navigate to payment failed screen with the real error message from Razorpay
+          const errorMsg = e.description || e.message || 'Payment transaction failed';
+          router.replace({
+            pathname: '/(client)/(modals)/payment-failed',
+            params: { error: errorMsg }
           });
-          queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
-          queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
-        } catch (apiErr) {
-          console.error('Failed to confirm simulated payment:', apiErr);
         }
-        
-        setTimeout(() => {
-          router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
-        }, 1500);
       }
     };
 
@@ -107,7 +117,6 @@ export default function PaymentProcessing() {
       <ActivityIndicator size="large" color={colors.primary} />
       <Text style={styles.title}>Processing Payment</Text>
       <Text style={styles.subtitle}>Please do not close this window or press the back button.</Text>
-      <Text style={[styles.subtitle, { marginTop: 20, fontWeight: 'bold' }]}>Test Card: 4111 1111 1111 1111</Text>
     </View>
   );
 }

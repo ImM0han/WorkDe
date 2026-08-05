@@ -1,20 +1,23 @@
+import dotenv from 'dotenv';
+dotenv.config();
+dotenv.config({ path: '.env.local', override: true });
+
 import * as admin from 'firebase-admin';
-import path from 'path';
 
-// Note: In production, load service account from an environment variable or secret manager
-// For local dev, make sure to add firebase-service-account.json to the backend root if needed,
-// but for now we'll initialize without credentials (or use default credentials) so it doesn't crash.
-
-try {
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(), // Uses GOOGLE_APPLICATION_CREDENTIALS
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'gigwork-dev.appspot.com'
-    });
-  }
-} catch (error) {
-  console.error('Firebase Admin initialization error', error);
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId:   process.env.FIREBASE_PROJECT_ID!,
+      privateKey:  process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL!,
+    }),
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'wrkup-e32bc.appspot.com',
+  });
+  console.log('[Firebase Admin] Initialized successfully');
 }
 
-export const bucket = admin.storage().bucket();
-export const firebaseAuth = admin.auth();
+// ✅ Functions — called at runtime, not at import time
+export const bucket         = admin.storage().bucket();
+export const getBucket      = () => bucket;
+export const firebaseAuth   = admin.auth();
+export { admin };
