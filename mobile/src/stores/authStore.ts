@@ -30,7 +30,8 @@ interface AuthStore {
   role: 'PARTNER' | 'CLIENT' | null;
   isLoading: boolean;
   pendingAuth: {
-    phone: string;
+    phone?: string;
+    email?: string;
     sessionId: string;
     isExistingUser: boolean;
     otpToken?: string;

@@ -308,8 +308,8 @@ export const completeJob = async (req: AuthRequest, res: Response): Promise<void
       // Credit partner's wallet
       if (updatedJob.partnerId && updatedJob.payment?.status !== 'COMPLETED') {
         const grossAmount = updatedJob.billableAmount || updatedJob.rate || 0;
-        const platformFee = grossAmount * 0.05;
-        const netAmount = grossAmount - platformFee;
+        const platformFee = 0;
+        const netAmount = grossAmount;
 
         await prisma.partner.update({
           where: { id: updatedJob.partnerId },

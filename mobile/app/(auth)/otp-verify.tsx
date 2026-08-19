@@ -1,26 +1,35 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
-import auth from '../../src/services/firebaseAuth';
+import supabase from '../../src/services/supabaseClient';
 import * as SecureStore from 'expo-secure-store';
 
 export default function OTPVerifyScreen() {
-  const { phone, mode } = useLocalSearchParams<{ phone: string, mode?: string }>();
+  const { phone, email, mode } = useLocalSearchParams<{ phone?: string, email?: string, mode?: string }>();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(60);
+  const [showMockOtpModal, setShowMockOtpModal] = useState(false);
+  const [showManualVerifyModal, setShowManualVerifyModal] = useState(false);
+  
   const inputs = useRef<Array<TextInput | null>>([]);
+  const manualVerifyResolver = useRef<(() => void) | null>(null);
   const { role, setUser, setOtpToken, clearPendingAuth, pendingAuth } = useAuthStore();
 
   useEffect(() => {
     let interval = setInterval(() => {
       setTimer(prev => (prev > 0 ? prev - 1 : 0));
     }, 1000);
+
+    // Show beautiful custom Mock OTP Modal on mount
+    setShowMockOtpModal(true);
+
     return () => clearInterval(interval);
   }, []);
 
@@ -46,22 +55,17 @@ export default function OTPVerifyScreen() {
 
     setLoading(true);
     try {
-      // 1. Retrieve the saved Firebase verificationId
-      const verificationId = await SecureStore.getItemAsync('firebase_verification_id');
-      if (!verificationId) {
-        throw new Error('Verification session has expired. Please request a new OTP.');
+      if (!phone && !email) {
+        throw new Error('Verification identifier is missing. Please try again.');
       }
 
-      // 2. Perform real SMS OTP verification with Firebase Auth SDK
-      console.log('[OTP Verify] Verifying OTP credential with Firebase...');
-      const credential = auth.PhoneAuthProvider.credential(verificationId, otpString);
-      const userCredential = await auth().signInWithCredential(credential);
-      
-      // 4. Retrieve the Firebase ID Token
-      const idToken = await userCredential.user.getIdToken();
-      console.log('[OTP Verify] Firebase ID token retrieved. Exchanging for app JWT...');
+      // Bypassing real OTP verification. Using mock authentication token.
+      console.log('[OTP Verify] Using mock authentication token...');
+      const idToken = `mock-supabase-access-token:${phone || email}`;
 
-      // 5. Send only the Firebase ID Token to our backend
+      console.log('[OTP Verify] verification token retrieved. Exchanging for app JWT...');
+
+      // 5. Send only the ID Token to our backend
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,6 +74,14 @@ export default function OTPVerifyScreen() {
       const data = await res.json();
       
       if (!res.ok) throw new Error(data.error || 'Backend verification failed');
+
+      if (mode !== 'forgot') {
+        // Show confirmation alert and wait for user to click OK
+        await new Promise<void>((resolve) => {
+          manualVerifyResolver.current = resolve;
+          setShowManualVerifyModal(true);
+        });
+      }
       
       if (mode === 'register') {
         // Automatically set password using the password stored during the register step
@@ -92,7 +104,7 @@ export default function OTPVerifyScreen() {
         });
       } else if (mode === 'forgot') {
         setOtpToken(data.otpToken);
-        router.replace('/(auth)/set-password');
+        router.replace('/(auth)/verify-questions');
       } else {
         await setUser(data.user, data.token);
         clearPendingAuth();
@@ -106,17 +118,22 @@ export default function OTPVerifyScreen() {
     }
   };
 
+  const handleManualVerifyConfirm = () => {
+    setShowManualVerifyModal(false);
+    if (manualVerifyResolver.current) {
+      manualVerifyResolver.current();
+    }
+  };
+
   const handleResend = async () => {
     if (timer > 0) return;
     setTimer(60);
     
     try {
-      console.log(`[OTP Verify] Resending Firebase OTP to: ${phone}`);
-      if (!phone) throw new Error('Phone number is missing');
+      console.log(`[OTP Verify] Bypassing Resending Supabase OTP to: ${phone || email}`);
+      if (!phone && !email) throw new Error('Verification identifier is missing');
       
-      const confirmation = await auth().signInWithPhoneNumber(phone);
-      await SecureStore.setItemAsync('firebase_verification_id', confirmation.verificationId);
-      Toast.show({ type: 'success', text1: 'OTP Resent successfully' });
+      Toast.show({ type: 'success', text1: 'Mock OTP code resent: 123456' });
     } catch (e: any) {
       Toast.show({ type: 'error', text1: 'Resend Failed', text2: getFriendlyErrorMessage(e) });
     }
@@ -132,9 +149,9 @@ export default function OTPVerifyScreen() {
         { top: 0.18, bottom: 0.92, left: 0.92, right: 1.0 }
       ]} />
       <View style={styles.content}>
-        <Text style={styles.title}>Verify your number</Text>
+        <Text style={styles.title}>Verify your account</Text>
         <Text style={styles.subtitle}>
-          Enter the 6-digit code sent to {phone}
+          Enter the 6-digit code sent to {phone || email}
         </Text>
 
         <View style={styles.otpContainer}>
@@ -176,6 +193,80 @@ export default function OTPVerifyScreen() {
           {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Verify →</Text>}
         </LinearGradient>
       </TouchableOpacity>
+
+      {/* Mock OTP Announcement Modal */}
+      <Modal
+        visible={showMockOtpModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMockOtpModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={[styles.modalIconContainer, { backgroundColor: '#FFF0D6' }]}>
+              <Feather name="shield" size={32} color="#FF6B1A" />
+            </View>
+            
+            <Text style={styles.modalTitle}>Mock Verification Mode</Text>
+            
+            <Text style={styles.modalDescription}>
+              For testing convenience, use the following mock verification code:
+            </Text>
+
+            <View style={styles.otpBadge}>
+              <Text style={styles.otpBadgeText}>123 456</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.modalButtonWrapper}
+              onPress={() => setShowMockOtpModal(false)}
+              activeOpacity={0.8}
+            >
+              <LinearGradient 
+                colors={['#FF6B1A', '#F59E0B']} 
+                style={styles.modalButton}
+              >
+                <Text style={styles.modalButtonText}>Got it, Let's verify</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Manual Verification Success Modal */}
+      <Modal
+        visible={showManualVerifyModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleManualVerifyConfirm}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={[styles.modalIconContainer, { backgroundColor: '#E1FCEF' }]}>
+              <Ionicons name="checkmark-circle-outline" size={36} color="#00C853" />
+            </View>
+            
+            <Text style={styles.modalTitle}>Verification Successful</Text>
+            
+            <Text style={styles.modalDescription}>
+              your number is verified manually by whatsapp or call
+            </Text>
+
+            <TouchableOpacity 
+              style={styles.modalButtonWrapper}
+              onPress={handleManualVerifyConfirm}
+              activeOpacity={0.8}
+            >
+              <LinearGradient 
+                colors={['#00C853', '#00E676']} 
+                style={styles.modalButton}
+              >
+                <Text style={styles.modalButtonText}>Continue →</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -246,6 +337,83 @@ const styles = StyleSheet.create({
   buttonText: {
     fontFamily: 'Nunito-Bold',
     fontSize: 18,
+    color: '#FFFFFF'
+  },
+  // Custom Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(28, 20, 16, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24
+  },
+  modalContainer: {
+    backgroundColor: '#FFFDFB',
+    borderRadius: 24,
+    padding: 28,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    shadowColor: '#1C1410',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 15,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 26, 0.08)'
+  },
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  modalTitle: {
+    fontFamily: 'Syne-ExtraBold',
+    fontSize: 22,
+    color: '#1C1410',
+    textAlign: 'center',
+    marginBottom: 12
+  },
+  modalDescription: {
+    fontFamily: 'Nunito-SemiBold',
+    fontSize: 15,
+    color: '#6B5C4E',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24
+  },
+  otpBadge: {
+    backgroundColor: '#FFF0D6',
+    borderWidth: 1.5,
+    borderColor: '#FF6B1A',
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    marginBottom: 24
+  },
+  otpBadgeText: {
+    fontFamily: 'DMMono-Medium',
+    fontSize: 24,
+    color: '#FF6B1A',
+    letterSpacing: 2
+  },
+  modalButtonWrapper: {
+    width: '100%'
+  },
+  modalButton: {
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%'
+  },
+  modalButtonText: {
+    fontFamily: 'Nunito-Bold',
+    fontSize: 16,
     color: '#FFFFFF'
   }
 });

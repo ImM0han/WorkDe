@@ -148,7 +148,7 @@
     "noTransactions": "No transactions yet",
     "creditFor": "Payment for Job #{{id}}",
     "debitFor": "Withdrawal to {{bank}}",
-    "platformFee": "Platform Fee (5%)",
+    "platformFee": "Platform Fee (0%)",
     "netAmount": "Net Amount",
     "transactionId": "Transaction ID",
     "copyId": "Long press to copy",

@@ -4,40 +4,41 @@ import { redis } from '../lib/redis';
 const lockouts = new Map<string, number>();
 const attempts = new Map<string, number>();
 
-export const checkLoginLockout = async (phone: string) => {
-  const lockedUntil = lockouts.get(phone);
+export const checkLoginLockout = async (identifier: string) => {
+  const lockedUntil = lockouts.get(identifier);
   if (lockedUntil && lockedUntil > Date.now()) {
     const ttl = Math.ceil((lockedUntil - Date.now()) / 1000);
     throw { status: 429, message: 'Too many attempts', retryAfter: ttl };
   } else if (lockedUntil) {
-    lockouts.delete(phone);
+    lockouts.delete(identifier);
   }
 };
 
-export const recordFailedAttempt = async (phone: string) => {
-  const current = (attempts.get(phone) || 0) + 1;
-  attempts.set(phone, current);
+export const recordFailedAttempt = async (identifier: string) => {
+  const current = (attempts.get(identifier) || 0) + 1;
+  attempts.set(identifier, current);
   
   if (current >= 5) {
-    lockouts.set(phone, Date.now() + 15 * 60 * 1000); // 15 mins lockout
-    attempts.delete(phone);
+    lockouts.set(identifier, Date.now() + 15 * 60 * 1000); // 15 mins lockout
+    attempts.delete(identifier);
   }
 };
 
-export const clearAttempts = async (phone: string) => {
-  attempts.delete(phone);
-  lockouts.delete(phone);
+export const clearAttempts = async (identifier: string) => {
+  attempts.delete(identifier);
+  lockouts.delete(identifier);
 };
 
 export const rateLimitOtp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { phone } = req.body;
-    if (!phone) {
-      res.status(400).json({ error: 'Phone number is required' });
+    const { phone, email } = req.body;
+    const identifier = phone || email;
+    if (!identifier) {
+      res.status(400).json({ error: 'Phone number or email is required' });
       return;
     }
 
-    const key = `rate:otp:${phone}`;
+    const key = `rate:otp:${identifier}`;
     const current = await redis.incr(key);
 
     if (current === 1) {

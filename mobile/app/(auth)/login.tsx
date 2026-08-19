@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
@@ -7,8 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
-import auth from '../../src/services/firebaseAuth';
-import * as SecureStore from 'expo-secure-store';
+import supabase from '../../src/services/supabaseClient';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
@@ -17,72 +16,88 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const { role, setUser, setPendingAuth } = useAuthStore();
 
-  const handleLogin = async () => {
-    if (phone.length !== 10 || !password) return;
-    
+  const handlePhoneBlocked = () => {
+    Alert.alert(
+      "Service Unavailable",
+      "Mobile authentication is not serviceable. An update is on the way.",
+      [{ text: "OK" }]
+    );
+  };
+
+  const handlePhonePasswordLogin = async () => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      Toast.show({ type: 'error', text1: 'Please enter a valid 10-digit phone number' });
+      return;
+    }
+    if (!password || password.length < 8) {
+      Toast.show({ type: 'error', text1: 'Password must be at least 8 characters' });
+      return;
+    }
+
     setLoading(true);
     try {
+      const fullPhone = `+91${cleanPhone}`;
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/login-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: `+91${phone}`, password, role })
+        body: JSON.stringify({ phone: fullPhone, password, role }),
       });
       const data = await res.json();
-      
+
       if (!res.ok) throw new Error(data.error || 'Login failed');
-      
+
       await setUser(data.user, data.token);
-      Toast.show({ type: 'success', text1: 'Logged in successfully' });
       
-      if (data.user.role === 'PARTNER') router.replace('/(partner)');
-      else router.replace('/(client)');
+      Toast.show({ type: 'success', text1: 'Welcome back!', text2: 'Logged in successfully.' });
+      
+      if (data.user.role === 'PARTNER') {
+        router.replace('/(partner)');
+      } else {
+        router.replace('/(client)');
+      }
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
+      Toast.show({ type: 'error', text1: 'Login Failed', text2: getFriendlyErrorMessage(err) });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgot = async () => {
-    if (phone.length !== 10) {
-      Toast.show({ type: 'error', text1: 'Enter phone number first' });
+  const handlePhoneForgot = async () => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      Toast.show({ type: 'error', text1: 'Please enter a valid 10-digit phone number first.' });
       return;
     }
 
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      // 1. Verify that the account exists on backend first
+      const fullPhone = `+91${cleanPhone}`;
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: `+91${phone}`, role }),
+        body: JSON.stringify({ phone: fullPhone, role }),
       });
       const data = await res.json();
-      
-      if (!res.ok) throw new Error(data.error);
 
-      // 2. Trigger real Firebase SMS OTP
-      const formattedPhone = `+91${phone}`;
-      console.log(`[Forgot Password] Requesting Firebase OTP for: ${formattedPhone}`);
-      const confirmation = await auth().signInWithPhoneNumber(formattedPhone);
+      if (!res.ok) throw new Error(data.error || 'Failed to verify account');
 
-      // 3. Save verificationId in secure store
-      await SecureStore.setItemAsync('firebase_verification_id', confirmation.verificationId);
+      // Trigger Supabase OTP for password reset (Bypassed for mock verification)
+      console.log(`[Forgot Password] Bypassing Supabase OTP trigger for: ${fullPhone}`);
 
       setPendingAuth({
-        phone: formattedPhone,
-        sessionId: '', // deprecated
+        phone: fullPhone,
+        sessionId: '',
         isExistingUser: true
       });
 
-      Toast.show({ type: 'success', text1: 'OTP Sent for Password Reset' });
+      Toast.show({ type: 'success', text1: 'Verification code sent (Mock)', text2: 'Please use mock code 123456.' });
       router.push({
         pathname: '/(auth)/otp-verify',
-        params: { phone: formattedPhone, mode: 'forgot' }
+        params: { phone: fullPhone, mode: 'forgot' }
       });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: getFriendlyErrorMessage(err) });
+      Toast.show({ type: 'error', text1: 'Verification Failed', text2: getFriendlyErrorMessage(err) });
     } finally {
       setLoading(false);
     }
@@ -148,18 +163,18 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <TouchableOpacity onPress={handleForgot} style={styles.forgotButton}>
+        <TouchableOpacity onPress={handlePhoneForgot} style={styles.forgotButton}>
           <Text style={styles.forgotText}>Forgot Password?</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={styles.buttonWrapper}
-          onPress={handleLogin}
-          disabled={phone.length !== 10 || !password || loading}
+          onPress={handlePhonePasswordLogin}
+          disabled={!phone || password.length < 8 || loading}
           activeOpacity={0.8}
         >
           <LinearGradient 
-            colors={phone.length === 10 && password ? ['#FF6B1A', '#F59E0B'] : ['#C4B5A5', '#C4B5A5']} 
+            colors={phone && password.length >= 8 ? ['#FF6B1A', '#F59E0B'] : ['#C4B5A5', '#C4B5A5']} 
             style={styles.button}
           >
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Login →</Text>}
@@ -210,7 +225,33 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-SemiBold',
     fontSize: 16,
     color: '#6B5C4E',
-    marginBottom: 40
+    marginBottom: 32
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF0D6',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,26,0.15)'
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 10
+  },
+  tabButtonActive: {
+    backgroundColor: '#FF6B1A',
+  },
+  tabButtonText: {
+    fontFamily: 'Nunito-Bold',
+    fontSize: 16,
+    color: '#6B5C4E'
+  },
+  tabButtonTextActive: {
+    color: '#FFFFFF'
   },
   inputGroup: {
     marginBottom: 20

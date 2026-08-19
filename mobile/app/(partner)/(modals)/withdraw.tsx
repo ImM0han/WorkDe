@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, ScrollView, Alert } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../../src/stores/authStore';
@@ -41,12 +41,20 @@ export default function WithdrawModal() {
 
   const handleWithdraw = async () => {
     try {
-      await api.post('/wallet/withdraw', { amount: Number(amount), bankId: selectedBank?.id });
+      const res = await api.post('/wallet/withdraw', { amount: Number(amount), bankId: selectedBank?.id });
       queryClient.invalidateQueries({ queryKey: ['partnerProfile', partnerIdToUse] });
       queryClient.invalidateQueries({ queryKey: ['transactions', partnerIdToUse] });
-      router.back();
-    } catch (error) {
+      
+      const destination = res.data?.bankAccount || (selectedBank?.ifsc === 'UPI' ? `UPI: ${selectedBank?.accountNumber}` : `${selectedBank?.holderName} (**** ${selectedBank?.accountNumber?.slice(-4)})`);
+      Alert.alert(
+        'Withdrawal Initiated',
+        `₹${amount} withdrawal request has been submitted to ${destination}.`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (error: any) {
       console.error('Withdrawal failed', error);
+      const errMsg = error.response?.data?.error || 'Failed to process withdrawal. Please try again.';
+      Alert.alert('Withdrawal Failed', errMsg);
     }
   };
 
@@ -71,10 +79,12 @@ export default function WithdrawModal() {
       {hasBankDetails ? (
         <View style={styles.bankCard}>
           <View style={styles.bankLeft}>
-            <Text style={styles.bankIcon}>🏦</Text>
+            <Text style={styles.bankIcon}>{selectedBank?.ifsc === 'UPI' ? '📱' : '🏦'}</Text>
             <View>
-              <Text style={styles.bankName}>{selectedBank?.holderName || 'Saved Bank'}</Text>
-              <Text style={styles.bankAcc}>**** {selectedBank?.accountNumber?.slice(-4) || 'XXXX'}</Text>
+              <Text style={styles.bankName}>{selectedBank?.ifsc === 'UPI' ? 'UPI ID' : (selectedBank?.holderName || 'Saved Bank')}</Text>
+              <Text style={styles.bankAcc}>
+                {selectedBank?.ifsc === 'UPI' ? selectedBank?.accountNumber : `**** ${selectedBank?.accountNumber?.slice(-4) || 'XXXX'}`}
+              </Text>
             </View>
           </View>
           <TouchableOpacity onPress={() => setBankModalVisible(true)}>
@@ -119,25 +129,30 @@ export default function WithdrawModal() {
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
             <Text style={styles.modalTitle}>Select Bank Account</Text>
             <ScrollView style={{ maxHeight: 300 }}>
-              {banks.map((bank: any) => (
-                <TouchableOpacity 
-                  key={bank.id} 
-                  style={[styles.bankOption, selectedBank?.id === bank.id && styles.selectedBankOption]}
-                  onPress={() => {
-                    setSelectedBankId(bank.id);
-                    setBankModalVisible(false);
-                  }}
-                >
-                  <View style={styles.bankLeft}>
-                    <Text style={styles.bankIcon}>🏦</Text>
-                    <View>
-                      <Text style={styles.bankName}>{bank.holderName}</Text>
-                      <Text style={styles.bankAcc}>**** {bank.accountNumber?.slice(-4)}</Text>
+              {banks.map((bank: any) => {
+                const isBankUpi = bank.ifsc === 'UPI';
+                return (
+                  <TouchableOpacity 
+                    key={bank.id} 
+                    style={[styles.bankOption, selectedBank?.id === bank.id && styles.selectedBankOption]}
+                    onPress={() => {
+                      setSelectedBankId(bank.id);
+                      setBankModalVisible(false);
+                    }}
+                  >
+                    <View style={styles.bankLeft}>
+                      <Text style={styles.bankIcon}>{isBankUpi ? '📱' : '🏦'}</Text>
+                      <View>
+                        <Text style={styles.bankName}>{isBankUpi ? 'UPI ID' : bank.holderName}</Text>
+                        <Text style={styles.bankAcc}>
+                          {isBankUpi ? bank.accountNumber : `**** ${bank.accountNumber?.slice(-4)}`}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                  {selectedBank?.id === bank.id && <Text style={{ fontSize: 20 }}>✅</Text>}
-                </TouchableOpacity>
-              ))}
+                    {selectedBank?.id === bank.id && <Text style={{ fontSize: 20 }}>✅</Text>}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
             <TouchableOpacity 
               style={styles.addBankBtn}

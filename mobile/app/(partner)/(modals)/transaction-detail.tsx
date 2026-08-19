@@ -65,11 +65,38 @@ export default function TransactionDetailModal() {
           <Text style={styles.label}>Description</Text>
           <Text style={styles.value}>{txn.title}</Text>
         </View>
+        {txn.bankAccount && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.row}>
+              <Text style={styles.label}>Account Details</Text>
+              <Text style={styles.value}>{txn.bankAccount}</Text>
+            </View>
+          </>
+        )}
         <View style={styles.divider} />
         <View style={styles.row}>
           <Text style={styles.label}>Date</Text>
           <Text style={styles.value}>{txn.date || new Date(txn.createdAt).toLocaleString()}</Text>
         </View>
+        {txn.razorpayPayoutId && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.row}>
+              <Text style={styles.label}>Payout ID</Text>
+              <Text style={[styles.value, styles.mono]}>{txn.razorpayPayoutId}</Text>
+            </View>
+          </>
+        )}
+        {txn.failureReason && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.row}>
+              <Text style={styles.label}>Note / Reason</Text>
+              <Text style={[styles.value, { color: '#EF4444' }]}>{txn.failureReason}</Text>
+            </View>
+          </>
+        )}
         <View style={styles.divider} />
         <TouchableOpacity style={styles.row} onLongPress={copyToClipboard} onPress={copyToClipboard}>
           <Text style={styles.label}>Transaction ID</Text>

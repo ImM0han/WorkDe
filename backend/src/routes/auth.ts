@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sendOtp, verifyOtp, register, me, setPassword, loginPassword, forgotPassword, resetPassword, changePassword, updateProfile } from '../controllers/authController';
+import { sendOtp, verifyOtp, register, me, setPassword, loginPassword, forgotPassword, resetPassword, changePassword, updateProfile, getUserSecurityQuestions, verifySecurityQuestions } from '../controllers/authController';
 import { authenticateToken } from '../middleware/auth';
 import { rateLimitOtp } from '../middleware/rateLimiter';
 
@@ -15,5 +15,7 @@ router.post('/reset-password', resetPassword);
 router.post('/change-password', authenticateToken, changePassword);
 router.get('/me', authenticateToken, me);
 router.put('/profile', authenticateToken, updateProfile);
+router.get('/security-questions', getUserSecurityQuestions);
+router.post('/verify-security-questions', verifySecurityQuestions);
 
 export default router;

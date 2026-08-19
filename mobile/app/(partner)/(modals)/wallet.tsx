@@ -74,13 +74,13 @@ export default function WalletScreen() {
               <View style={[styles.iconWrapper, { backgroundColor: txn.type === 'CREDIT' ? '#DCFCE7' : '#FEE2E2' }]}>
                 <Text style={styles.icon}>{txn.type === 'CREDIT' ? '↓' : '↑'}</Text>
               </View>
-              <View>
-                <Text style={styles.txnTitle}>{txn.title}</Text>
+              <View style={styles.txnTextWrapper}>
+                <Text style={styles.txnTitle} numberOfLines={1} ellipsizeMode="tail">{txn.title}</Text>
                 <Text style={styles.txnDate}>{txn.date || new Date(txn.createdAt).toLocaleDateString()}</Text>
               </View>
             </View>
             <Text style={[styles.txnAmount, { color: txn.type === 'CREDIT' ? '#166534' : '#1C1410' }]}>
-              {txn.type === 'CREDIT' ? '+' : '-'}₹{Math.abs(txn.amount || txn.netAmount)}
+              {txn.type === 'CREDIT' ? '+' : '-'}₹{Math.abs(txn.amount || txn.netAmount).toFixed(2)}
             </Text>
           </TouchableOpacity>
         )))}
@@ -102,10 +102,11 @@ const styles = StyleSheet.create({
   actionText: { fontFamily: 'Nunito-Bold', fontSize: 14, color: '#FFFFFF' },
   sectionTitle: { fontFamily: 'Syne-Bold', fontSize: 18, color: '#1C1410', marginBottom: 16 },
   txnRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 1, borderColor: '#EEE0CC' },
-  txnLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  txnLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, marginRight: 12 },
   iconWrapper: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   icon: { fontSize: 18 },
+  txnTextWrapper: { flex: 1, marginRight: 4 },
   txnTitle: { fontFamily: 'Nunito-Bold', fontSize: 14, color: '#1C1410' },
   txnDate: { fontFamily: 'DMMono-Regular', fontSize: 12, color: '#C4B5A5', marginTop: 2 },
-  txnAmount: { fontFamily: 'DMMono-Medium', fontSize: 16, fontWeight: '800' }
+  txnAmount: { fontFamily: 'DMMono-Medium', fontSize: 15, fontWeight: '800', textAlign: 'right', minWidth: 65 }
 });

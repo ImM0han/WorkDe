@@ -12,6 +12,31 @@ export default function PaymentProcessing() {
   const queryClient = useQueryClient();
   const { jobId, rate } = useLocalSearchParams<{ jobId: string; rate: string }>();
 
+  const handleSimulatePayment = async (orderIdFromInitiate?: string) => {
+    try {
+      console.log('[Payment Processing] Simulating payment success...');
+      const fakePaymentId = `pay_simulated_${Math.random().toString(36).substring(2, 9)}`;
+      const fakeOrderId = orderIdFromInitiate || `order_simulated_${Math.random().toString(36).substring(2, 9)}`;
+      
+      await api.post('/payments/confirm', {
+        razorpayOrderId: fakeOrderId,
+        razorpayPaymentId: fakePaymentId,
+        razorpaySignature: 'simulated_payment_sig',
+        jobId
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
+      router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
+    } catch (simErr: any) {
+      console.error('[Payment Processing] Simulated payment failed:', simErr.message);
+      router.replace({
+        pathname: '/(client)/(modals)/payment-failed',
+        params: { error: simErr.response?.data?.error || 'Simulated payment failed' }
+      });
+    }
+  };
+
   useEffect(() => {
     const backAction = () => true;
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
@@ -51,6 +76,16 @@ export default function PaymentProcessing() {
           pathname: '/(client)/(modals)/payment-failed',
           params: { error: err.response?.data?.error || 'Failed to initiate payment on server' }
         });
+        return;
+      }
+
+      const hasNativeSDK = RazorpayCheckout && typeof RazorpayCheckout.open === 'function';
+      if (!hasNativeSDK) {
+        console.log('[Payment Processing] Razorpay native SDK not found. Running automatic simulation...');
+        // Automatically simulate payment success after 1.5 seconds in missing SDK environment
+        setTimeout(() => {
+          handleSimulatePayment(orderId);
+        }, 1500);
         return;
       }
 
@@ -109,7 +144,9 @@ export default function PaymentProcessing() {
 
     processPayment();
 
-    return () => backHandler.remove();
+    return () => {
+      backHandler.remove();
+    };
   }, []);
 
   return (

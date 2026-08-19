@@ -14,6 +14,10 @@ export default function AddBankModal() {
   const [ifsc, setIfsc] = useState('');
   const [upiId, setUpiId] = useState('');
 
+  const handleUpiChange = (text: string) => {
+    setUpiId(text.replace(/\s+/g, ''));
+  };
+
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,7 +42,7 @@ export default function AddBankModal() {
   };
 
   const isBankValid = accName && accNumber.length > 5 && ifsc.length > 4;
-  const isUpiValid = upiId.includes('@') && upiId.length > 3;
+  const isUpiValid = upiId.includes('@') && !upiId.includes(' ') && upiId.split('@')[0].length >= 2 && upiId.split('@')[1].length >= 2;
   const isValid = activeMethod === 'BANK' ? isBankValid : isUpiValid;
 
   return (
@@ -108,7 +112,7 @@ export default function AddBankModal() {
               placeholderTextColor="#C4B5A5"
               autoCapitalize="none"
               value={upiId}
-              onChangeText={setUpiId}
+              onChangeText={handleUpiChange}
             />
             <Text style={styles.helperText}>Enter your valid UPI ID linked to your bank account.</Text>
           </View>

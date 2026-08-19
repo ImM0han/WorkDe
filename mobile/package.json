@@ -20,6 +20,7 @@
     "@react-native-firebase/app": "^25.1.0",
     "@react-native-firebase/auth": "^25.1.0",
     "@react-navigation/native": "^7.1.8",
+    "@supabase/supabase-js": "^2.112.2",
     "@tanstack/react-query": "^5.100.6",
     "axios": "^1.15.2",
     "expo": "~54.0.33",

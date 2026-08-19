@@ -9,7 +9,7 @@ datasource db {
 
 model User {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
-  phone         String    @unique
+  phone         String?
   name          String
   email         String?
   avatarUrl     String?
@@ -27,6 +27,7 @@ model User {
   failedAttempts Int        @default(0)
   lockedUntil   DateTime?
   gender        String?
+  securityQuestions Json?
 
   partner       Partner?
   clientJobs    Job[]     @relation("ClientJobs")
@@ -263,11 +264,14 @@ enum DisputeStatus {
 }
 
 model Withdrawal {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  partnerId     String   @db.ObjectId
-  partner       Partner  @relation(fields: [partnerId], references: [id])
-  amount        Float
-  bankAccount   String?
-  status        String   @default("COMPLETED")
-  createdAt     DateTime @default(now())
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  partnerId          String   @db.ObjectId
+  partner            Partner  @relation(fields: [partnerId], references: [id])
+  amount             Float
+  bankAccount        String?
+  status             String   @default("COMPLETED")
+  razorpayPayoutId   String?
+  payoutStatus       String?
+  failureReason      String?
+  createdAt          DateTime @default(now())
 }
