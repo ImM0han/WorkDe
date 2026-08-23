@@ -1,6 +1,22 @@
+export async function parseResponseJson(res: Response): Promise<any> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    if (text.trim().startsWith('<') || text.toLowerCase().includes('<!doctype html>')) {
+      throw new Error(`Server returned HTML instead of JSON (Status ${res.status}). Please check EXPO_PUBLIC_API_URL in .env.`);
+    }
+    throw new Error(`Invalid server response (Status ${res.status}): ${text.substring(0, 80)}`);
+  }
+}
+
 export function getFriendlyErrorMessage(err: any): string {
   const message = err.message || '';
   const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+
+  if (message.includes('Unexpected character') || message.includes('JSON Parse error') || message.includes('returned HTML')) {
+    return `Server Response Error\n\nThe backend server returned an HTML page instead of JSON.\nTarget URL: ${apiUrl}\nCheck that the backend is running and EXPO_PUBLIC_API_URL is correct.`;
+  }
 
   if (message.includes('Network request failed') || message.includes('Network Error')) {
     let details = 'Network Connection Failed\n\n';

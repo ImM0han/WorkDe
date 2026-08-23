@@ -6,7 +6,7 @@ import Toast from 'react-native-toast-message';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useAdminStore } from '../../src/stores/adminStore';
-import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
+import { getFriendlyErrorMessage, parseResponseJson } from '../../src/services/errorHelpers';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
 import supabase from '../../src/services/supabaseClient';
 
@@ -48,7 +48,7 @@ export default function LoginScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: fullPhone, username: rawInput, password, role }),
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
 
       if (!res.ok) throw new Error(data.error || 'Login failed');
 
@@ -90,7 +90,7 @@ export default function LoginScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: fullPhone, role }),
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
 
       if (!res.ok) throw new Error(data.error || 'Failed to verify account');
 
