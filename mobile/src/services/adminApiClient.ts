@@ -3,10 +3,10 @@ import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import { useAdminStore } from '../stores/adminStore';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:10000';
+import { getApiBaseUrl } from './apiClient';
 
 const adminApi = axios.create({
-  baseURL: `${BASE_URL}/ops-console`
+  baseURL: `${getApiBaseUrl()}/ops-console`
 });
 
 adminApi.interceptors.request.use(async (config) => {

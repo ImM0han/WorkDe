@@ -3,7 +3,14 @@ import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import { useAuthStore } from '../stores/authStore';
 
-const api = axios.create({ baseURL: process.env.EXPO_PUBLIC_API_URL });
+export function getApiBaseUrl(): string {
+  let url = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000').trim();
+  url = url.replace(/\/+$/, '');
+  url = url.replace(/\/api\/v1$/i, '');
+  return url;
+}
+
+const api = axios.create({ baseURL: getApiBaseUrl() });
 
 api.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync('auth_token');

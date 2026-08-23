@@ -5,7 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
-import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
+import { getFriendlyErrorMessage, parseResponseJson } from '../../src/services/errorHelpers';
+import { getApiBaseUrl } from '../../src/services/apiClient';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
 import supabase from '../../src/services/supabaseClient';
 import * as SecureStore from 'expo-secure-store';
@@ -66,12 +67,12 @@ export default function OTPVerifyScreen() {
       console.log('[OTP Verify] verification token retrieved. Exchanging for app JWT...');
 
       // 5. Send only the ID Token to our backend
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/verify-otp`, {
+      const res = await fetch(`${getApiBaseUrl()}/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken, role })
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       
       if (!res.ok) throw new Error(data.error || 'Backend verification failed');
 
@@ -85,7 +86,7 @@ export default function OTPVerifyScreen() {
       
       if (mode === 'register') {
         // Automatically set password using the password stored during the register step
-        const pwdRes = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/set-password`, {
+        const pwdRes = await fetch(`${getApiBaseUrl()}/auth/set-password`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -93,7 +94,7 @@ export default function OTPVerifyScreen() {
           },
           body: JSON.stringify({ password: pendingAuth?.password })
         });
-        const pwdData = await pwdRes.json();
+        const pwdData = await parseResponseJson(pwdRes);
         
         if (!pwdRes.ok) throw new Error(pwdData.error || 'Failed to complete registration');
         

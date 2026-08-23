@@ -5,7 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
-import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
+import { getFriendlyErrorMessage, parseResponseJson } from '../../src/services/errorHelpers';
+import { getApiBaseUrl } from '../../src/services/apiClient';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
 import supabase from '../../src/services/supabaseClient';
 
@@ -39,12 +40,12 @@ export default function RegisterStartScreen() {
     try {
       const fullPhone = `+91${cleanPhone}`;
       // 1. Verify availability and validate role on backend first
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/send-otp`, {
+      const res = await fetch(`${getApiBaseUrl()}/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: fullPhone, role })
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       
       if (!res.ok) throw new Error(data.error || 'Failed to initiate registration');
       

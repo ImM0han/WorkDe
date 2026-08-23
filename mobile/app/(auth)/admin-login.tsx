@@ -5,7 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { Feather } from '@expo/vector-icons';
 import { useAdminStore } from '../../src/stores/adminStore';
-import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
+import { getFriendlyErrorMessage, parseResponseJson } from '../../src/services/errorHelpers';
+import { getApiBaseUrl } from '../../src/services/apiClient';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
 
 export default function AdminLoginScreen() {
@@ -27,7 +28,7 @@ export default function AdminLoginScreen() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/ops-console/auth/login`, {
+      const res = await fetch(`${getApiBaseUrl()}/ops-console/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -36,7 +37,7 @@ export default function AdminLoginScreen() {
         }),
       });
 
-      const data = await res.json();
+      const data = await parseResponseJson(res);
 
       if (!res.ok) {
         throw new Error(data.error || 'Admin login failed');

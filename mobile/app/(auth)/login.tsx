@@ -7,6 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useAdminStore } from '../../src/stores/adminStore';
 import { getFriendlyErrorMessage, parseResponseJson } from '../../src/services/errorHelpers';
+import { getApiBaseUrl } from '../../src/services/apiClient';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
 import supabase from '../../src/services/supabaseClient';
 
@@ -43,7 +44,7 @@ export default function LoginScreen() {
       const cleanDigits = rawInput.replace(/\D/g, '');
       const fullPhone = cleanDigits.length === 10 ? `+91${cleanDigits}` : rawInput;
 
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/login-password`, {
+      const res = await fetch(`${getApiBaseUrl()}/auth/login-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: fullPhone, username: rawInput, password, role }),
@@ -85,7 +86,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const fullPhone = `+91${cleanPhone}`;
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/forgot-password`, {
+      const res = await fetch(`${getApiBaseUrl()}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: fullPhone, role }),
