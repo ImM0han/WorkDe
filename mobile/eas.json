@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 10.0.0"
+    "version": ">= 10.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -13,8 +14,9 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://pleasing-serenity-nodeenvdevelopment.up.railway.app",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_xxxxxx"
+        "EXPO_PUBLIC_API_URL": "https://gigwork-backend-production-2fa6.up.railway.app",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_SkZLj5dtAq3jYFS",
+        "EXPO_PUBLIC_USE_REAL_FIREBASE": "true"
       }
     },
     "production": {
@@ -23,8 +25,9 @@
       },
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://pleasing-serenity-nodeenvdevelopment.up.railway.app",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_xxxxxx"
+        "EXPO_PUBLIC_API_URL": "https://gigwork-backend-production-2fa6.up.railway.app",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_SkZLj5dtAq3jYFS",
+        "EXPO_PUBLIC_USE_REAL_FIREBASE": "true"
       }
     }
   }
