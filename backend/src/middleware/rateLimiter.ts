@@ -87,3 +87,53 @@ export const rateLimitPayment = async (req: any, res: Response, next: NextFuncti
   }
 };
 
+const adminLoginIpAttempts = new Map<string, { count: number; resetAt: number }>();
+
+export const rateLimitAdminLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || req.ip || 'unknown_ip';
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000; // 15 minutes
+  const maxAttempts = 10;
+
+  try {
+    const key = `rate:admin:login:${ip}`;
+    const current = await redis.incr(key);
+
+    if (current === 1) {
+      await redis.expire(key, 900); // 15 mins (900s)
+    }
+
+    if (current > maxAttempts) {
+      const ttl = await redis.ttl(key);
+      res.status(429).json({
+        error: 'Too many login attempts from this IP. Please try again in 15 minutes.',
+        retryAfter: ttl
+      });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    // Memory fallback if Redis fails or isn't connected
+    let record = adminLoginIpAttempts.get(ip);
+    if (!record || now > record.resetAt) {
+      record = { count: 1, resetAt: now + windowMs };
+    } else {
+      record.count += 1;
+    }
+    adminLoginIpAttempts.set(ip, record);
+
+    if (record.count > maxAttempts) {
+      const retryAfter = Math.ceil((record.resetAt - now) / 1000);
+      res.status(429).json({
+        error: 'Too many login attempts from this IP. Please try again in 15 minutes.',
+        retryAfter
+      });
+      return;
+    }
+
+    next();
+  }
+};
+
+

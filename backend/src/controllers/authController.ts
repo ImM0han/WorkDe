@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import { checkLoginLockout, recordFailedAttempt, clearAttempts } from '../middleware/rateLimiter';
 import admin from '../lib/firebase';
 import { supabase } from '../lib/supabase';
+import { checkPhoneBanned } from '../utils/bannedPhoneCheck';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_min_32_chars';
@@ -19,6 +20,10 @@ export const sendOtp = async (req: Request, res: Response) => {
 
     let user = null;
     if (phone) {
+      const banCheck = await checkPhoneBanned(phone);
+      if (banCheck.isBanned) {
+        return res.status(403).json({ error: banCheck.message });
+      }
       user = await prisma.user.findFirst({ where: { phone } });
     } else if (email) {
       user = await prisma.user.findFirst({ where: { email } });
@@ -81,6 +86,10 @@ export const verifyOtp = async (req: Request, res: Response) => {
 
     let user = null;
     if (phone) {
+      const banCheck = await checkPhoneBanned(phone);
+      if (banCheck.isBanned) {
+        return res.status(403).json({ error: banCheck.message });
+      }
       user = await prisma.user.findFirst({ where: { phone }, include: { partner: true } });
     } else if (email) {
       user = await prisma.user.findFirst({ where: { email }, include: { partner: true } });
@@ -191,8 +200,49 @@ export const loginPassword = async (req: Request, res: Response) => {
       return res.status(429).json(e);
     }
 
+    // Check if credentials belong to an Admin / Superadmin account
+    const cleanId = (identifier || '').trim();
+    const adminUser = await prisma.adminUser.findFirst({
+      where: {
+        OR: [
+          { username: cleanId },
+          { username: cleanId.replace('+91', '') },
+          { username: `+91${cleanId.replace(/\D/g, '')}` }
+        ],
+        isActive: true
+      }
+    });
+
+    if (adminUser) {
+      const isMatch = await bcrypt.compare(password, adminUser.passwordHash);
+      if (isMatch) {
+        await clearAttempts(identifier);
+        const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'fallback_admin_jwt_secret_min_32_chars_diff';
+        const adminToken = jwt.sign(
+          { id: adminUser.id, role: adminUser.role, username: adminUser.username },
+          ADMIN_JWT_SECRET,
+          { expiresIn: '8h' }
+        );
+        return res.status(200).json({
+          isAdmin: true,
+          token: adminToken,
+          user: {
+            id: adminUser.id,
+            name: adminUser.username,
+            username: adminUser.username,
+            role: adminUser.role,
+            isVerified: true
+          }
+        });
+      }
+    }
+
     let user = null;
     if (phone) {
+      const banCheck = await checkPhoneBanned(phone);
+      if (banCheck.isBanned) {
+        return res.status(403).json({ error: banCheck.message });
+      }
       user = await prisma.user.findFirst({ where: { phone }, include: { partner: true } });
     } else if (email) {
       user = await prisma.user.findFirst({ where: { email }, include: { partner: true } });
@@ -285,6 +335,13 @@ export const register = async (req: Request, res: Response) => {
     const { name, email, phone: bodyPhone, avatarUrl, gender, securityQuestions } = req.body;
     const phone = decoded.phone || bodyPhone;
     const decodedEmail = decoded.email;
+
+    if (phone) {
+      const banCheck = await checkPhoneBanned(phone);
+      if (banCheck.isBanned) {
+        return res.status(403).json({ error: banCheck.message });
+      }
+    }
 
     if (!phone && !decodedEmail && !decoded.id) {
       return res.status(400).json({ error: 'Identifier not found in token' });

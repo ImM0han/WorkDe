@@ -66,9 +66,8 @@ export const getBalance = async (req: AuthRequest, res: Response): Promise<void>
       title: `Withdrawal to ${w.bankAccount || 'Bank'}`,
       bankAccount: w.bankAccount,
       status: w.status,
-      razorpayPayoutId: w.razorpayPayoutId,
-      payoutStatus: w.payoutStatus,
-      failureReason: w.failureReason,
+      utrNumber: w.utrNumber,
+      rejectionReason: w.rejectionReason,
       createdAt: w.createdAt
     }));
 
@@ -113,7 +112,7 @@ export const withdrawFunds = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     if (partner.walletBalance < amount) {
-      res.status(400).json({ error: 'Insufficient funds' });
+      res.status(400).json({ error: 'Insufficient funds in wallet' });
       return;
     }
 
@@ -142,8 +141,6 @@ export const withdrawFunds = async (req: AuthRequest, res: Response): Promise<vo
       ? partner.user.name.trim()
       : (partner.user.phone ? `Partner ${partner.user.phone.slice(-4)}` : 'Partner User');
 
-    const contactPhone = (partner.user.phone || '9999999999').replace(/[^0-9]/g, '').slice(-10) || '9999999999';
-
     let bankAccountStr = '';
     if (bank.ifsc === 'UPI') {
       bankAccountStr = `UPI: ${bank.accountNumber}`;
@@ -151,143 +148,8 @@ export const withdrawFunds = async (req: AuthRequest, res: Response): Promise<vo
       bankAccountStr = `${bank.holderName || contactName} (A/C: ${bank.accountNumber}, IFSC: ${bank.ifsc})`;
     }
 
-    // Initiate actual payment via Razorpay Payouts
-    let payoutId: string | null = null;
-    let payoutStatus = 'pending';
-    let failureReason: string | null = null;
-    let payoutSuccess = false;
-    const isUpi = bank.ifsc === 'UPI';
-
-    const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
-    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
-    const razorpayAccountNumber = process.env.RAZORPAY_ACCOUNT_NUMBER || '2333300200000001';
-
-    if (razorpayKeyId && razorpayKeySecret) {
-      try {
-        console.log(`[Payout] Creating Razorpay contact for partner: ${contactName}`);
-        const contactRes = await axios.post(
-          'https://api.razorpay.com/v1/contacts',
-          {
-            name: contactName,
-            email: partner.user.email || 'partner@wrkup.com',
-            contact: contactPhone,
-            type: 'employee',
-            reference_id: partner.id
-          },
-          {
-            auth: {
-              username: razorpayKeyId,
-              password: razorpayKeySecret
-            }
-          }
-        );
-        const contactId = contactRes.data.id;
-
-        console.log(`[Payout] Creating Razorpay fund account for type: ${isUpi ? 'vpa' : 'bank_account'}`);
-        const fundPayload = isUpi
-          ? {
-              contact_id: contactId,
-              account_type: 'vpa',
-              vpa: { address: bank.accountNumber }
-            }
-          : {
-              contact_id: contactId,
-              account_type: 'bank_account',
-              bank_account: {
-                name: bank.holderName || contactName,
-                ifsc: bank.ifsc,
-                account_number: bank.accountNumber
-              }
-            };
-
-        const fundRes = await axios.post(
-          'https://api.razorpay.com/v1/fund_accounts',
-          fundPayload,
-          {
-            auth: {
-              username: razorpayKeyId,
-              password: razorpayKeySecret
-            }
-          }
-        );
-        const fundAccountId = fundRes.data.id;
-
-        console.log(`[Payout] Triggering payout of amount ₹${amount} (paise: ${amount * 100})`);
-        const payoutRes = await axios.post(
-          'https://api.razorpay.com/v1/payouts',
-          {
-            account_number: razorpayAccountNumber,
-            fund_account_id: fundAccountId,
-            amount: Math.round(amount * 100),
-            currency: 'INR',
-            mode: isUpi ? 'UPI' : 'IMPS',
-            purpose: 'payout',
-            queue_if_low_balance: true
-          },
-          {
-            auth: {
-              username: razorpayKeyId,
-              password: razorpayKeySecret
-            }
-          }
-        );
-
-        payoutId = payoutRes.data.id;
-        payoutStatus = payoutRes.data.status || 'processed';
-        payoutSuccess = true;
-        console.log(`[Payout Success] Razorpay Payout ID: ${payoutId}`);
-      } catch (payErr: any) {
-        const errObj = payErr.response?.data?.error || payErr.response?.data || payErr.message;
-        const errDescription = typeof errObj === 'object' ? (errObj.description || JSON.stringify(errObj)) : String(errObj);
-        console.error('[Payout Error] Razorpay Payout API call failed:', errDescription);
-
-        const isTestKey = (razorpayKeyId || '').startsWith('rzp_test_');
-        const isNotFoundErr = payErr.response?.status === 404 || errDescription.includes('not found on the server');
-        const allowSim = process.env.ALLOW_PAYOUT_SIMULATION === 'true' || process.env.NODE_ENV !== 'production' || isTestKey || isNotFoundErr;
-
-        if (allowSim) {
-          console.warn('[Payout Warning] Processing successful simulation in test environment / test key.', errDescription);
-          payoutId = `payout_sim_${Math.floor(Math.random() * 100000000)}`;
-          payoutStatus = 'processed';
-          payoutSuccess = true;
-        } else {
-          payoutSuccess = false;
-          failureReason = errDescription;
-        }
-      }
-    } else {
-      const allowSim = process.env.ALLOW_PAYOUT_SIMULATION === 'true' || process.env.NODE_ENV !== 'production';
-      if (allowSim) {
-        payoutId = `payout_sim_${Math.floor(Math.random() * 100000000)}`;
-        payoutStatus = 'processed';
-        payoutSuccess = true;
-      } else {
-        payoutSuccess = false;
-        failureReason = 'Razorpay API credentials not configured in environment.';
-      }
-    }
-
-    if (!payoutSuccess) {
-      // Record FAILED withdrawal without deducting partner balance!
-      await prisma.withdrawal.create({
-        data: {
-          partnerId,
-          amount,
-          bankAccount: bankAccountStr,
-          status: 'FAILED',
-          razorpayPayoutId: payoutId,
-          payoutStatus: 'failed',
-          failureReason: failureReason || 'Payout processing failed'
-        }
-      });
-      res.status(400).json({ 
-        error: `Withdrawal failed: ${failureReason || 'Could not transfer funds via Razorpay.'} Your wallet balance was not deducted.` 
-      });
-      return;
-    }
-
-    // Deduct balance and create successful withdrawal record
-    await prisma.$transaction([
+    // Atomic transaction: Deduct partner balance immediately and create PENDING withdrawal request
+    const [updatedPartner, newWithdrawal] = await prisma.$transaction([
       prisma.partner.update({
         where: { id: partnerId },
         data: { walletBalance: { decrement: amount } }
@@ -297,18 +159,25 @@ export const withdrawFunds = async (req: AuthRequest, res: Response): Promise<vo
           partnerId,
           amount,
           bankAccount: bankAccountStr,
-          status: payoutStatus === 'rejected' || payoutStatus === 'failed' ? 'FAILED' : 'COMPLETED',
-          razorpayPayoutId: payoutId,
-          payoutStatus,
-          failureReason: null
+          status: 'PENDING'
         }
       })
     ]);
 
-    res.json({ message: 'Withdrawal processed successfully', payoutId, bankAccount: bankAccountStr });
+    res.json({
+      message: 'Withdrawal request submitted successfully',
+      withdrawal: {
+        id: newWithdrawal.id,
+        amount: newWithdrawal.amount,
+        bankAccount: newWithdrawal.bankAccount,
+        status: newWithdrawal.status,
+        createdAt: newWithdrawal.createdAt
+      },
+      remainingBalance: updatedPartner.walletBalance
+    });
   } catch (error: any) {
-    console.error('[Withdrawal error]:', error.message || error);
-    res.status(500).json({ error: 'Failed to process withdrawal' });
+    console.error('[Withdrawal Request error]:', error.message || error);
+    res.status(500).json({ error: 'Failed to submit withdrawal request' });
   }
 };
 
@@ -389,9 +258,8 @@ export const getTransactions = async (req: AuthRequest, res: Response): Promise<
       title: `Withdrawal to ${w.bankAccount || 'Bank'}`,
       bankAccount: w.bankAccount,
       status: w.status,
-      razorpayPayoutId: w.razorpayPayoutId,
-      payoutStatus: w.payoutStatus,
-      failureReason: w.failureReason,
+      utrNumber: w.utrNumber,
+      rejectionReason: w.rejectionReason,
       createdAt: w.createdAt
     }));
 
@@ -460,9 +328,8 @@ export const getTransactionById = async (req: AuthRequest, res: Response): Promi
         type: 'DEBIT',
         title: `Withdrawal to ${withdrawal.bankAccount || 'Bank'}`,
         bankAccount: withdrawal.bankAccount,
-        razorpayPayoutId: withdrawal.razorpayPayoutId,
-        payoutStatus: withdrawal.payoutStatus,
-        failureReason: withdrawal.failureReason,
+        utrNumber: withdrawal.utrNumber,
+        rejectionReason: withdrawal.rejectionReason,
         createdAt: withdrawal.createdAt,
         status: withdrawal.status
       });

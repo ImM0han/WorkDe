@@ -14,6 +14,7 @@ import aadhaarRoutes from './routes/aadhaar';
 import disputeRoutes from './routes/disputes';
 import clientRoutes from './routes/client';
 import addressRoutes from './routes/addresses';
+import adminRoutes from './routes/admin';
 import { initSocket, setIO } from './socket';
 
 dotenv.config();
@@ -49,6 +50,7 @@ app.use('/aadhaar', aadhaarRoutes);
 app.use('/disputes', disputeRoutes);
 app.use('/client', clientRoutes);
 app.use('/addresses', addressRoutes);
+app.use('/ops-console', adminRoutes);
 
 const PORT = process.env.PORT || 4000;
 

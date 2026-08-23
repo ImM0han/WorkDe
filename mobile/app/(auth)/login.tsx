@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
+import { useAdminStore } from '../../src/stores/adminStore';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
 import ScatteredJobIcons from '../../src/components/ScatteredJobIcons';
 import supabase from '../../src/services/supabaseClient';
@@ -24,28 +25,39 @@ export default function LoginScreen() {
     );
   };
 
+  const { setAdmin } = useAdminStore();
+
   const handlePhonePasswordLogin = async () => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length !== 10) {
-      Toast.show({ type: 'error', text1: 'Please enter a valid 10-digit phone number' });
+    const rawInput = phone.trim();
+    if (!rawInput) {
+      Toast.show({ type: 'error', text1: 'Please enter a valid phone number or admin username' });
       return;
     }
-    if (!password || password.length < 8) {
-      Toast.show({ type: 'error', text1: 'Password must be at least 8 characters' });
+    if (!password || password.length < 6) {
+      Toast.show({ type: 'error', text1: 'Password must be at least 6 characters' });
       return;
     }
 
     setLoading(true);
     try {
-      const fullPhone = `+91${cleanPhone}`;
+      const cleanDigits = rawInput.replace(/\D/g, '');
+      const fullPhone = cleanDigits.length === 10 ? `+91${cleanDigits}` : rawInput;
+
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/login-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: fullPhone, password, role }),
+        body: JSON.stringify({ phone: fullPhone, username: rawInput, password, role }),
       });
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error || 'Login failed');
+
+      if (data.isAdmin || data.user?.role === 'SUPERADMIN' || data.user?.role === 'ADMIN') {
+        await setAdmin(data.user, data.token);
+        Toast.show({ type: 'success', text1: `Welcome Admin ${data.user.name || data.user.username}!`, text2: 'Logged in to Ops Console.' });
+        router.replace('/(admin)' as any);
+        return;
+      }
 
       await setUser(data.user, data.token);
       
@@ -170,11 +182,11 @@ export default function LoginScreen() {
         <TouchableOpacity 
           style={styles.buttonWrapper}
           onPress={handlePhonePasswordLogin}
-          disabled={!phone || password.length < 8 || loading}
+          disabled={!phone || password.length < 6 || loading}
           activeOpacity={0.8}
         >
           <LinearGradient 
-            colors={phone && password.length >= 8 ? ['#FF6B1A', '#F59E0B'] : ['#C4B5A5', '#C4B5A5']} 
+            colors={phone && password.length >= 6 ? ['#FF6B1A', '#F59E0B'] : ['#C4B5A5', '#C4B5A5']} 
             style={styles.button}
           >
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Login →</Text>}

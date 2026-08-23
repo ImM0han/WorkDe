@@ -10,11 +10,14 @@ datasource db {
 model User {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   phone         String?
+  originalPhone String?
   name          String
   email         String?
   avatarUrl     String?
   role          Role      @default(CLIENT)
   isVerified    Boolean   @default(false)
+  isAuthProcessing Boolean @default(false)
+  isDeleted     Boolean   @default(false)
   aadhaarStatus KYCStatus @default(PENDING)
   aadhaarNumber String?
   dob           DateTime?
@@ -263,15 +266,66 @@ enum DisputeStatus {
   CLOSED
 }
 
-model Withdrawal {
-  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
-  partnerId          String   @db.ObjectId
-  partner            Partner  @relation(fields: [partnerId], references: [id])
-  amount             Float
-  bankAccount        String?
-  status             String   @default("COMPLETED")
-  razorpayPayoutId   String?
-  payoutStatus       String?
-  failureReason      String?
-  createdAt          DateTime @default(now())
+enum WithdrawalStatus {
+  PENDING
+  PROCESSING
+  PAID
+  REJECTED
 }
+
+enum AdminRole {
+  SUPERADMIN
+  ADMIN
+}
+
+model Withdrawal {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  partnerId       String           @db.ObjectId
+  partner         Partner          @relation(fields: [partnerId], references: [id])
+  amount          Float
+  bankAccount     String?
+  status          WithdrawalStatus @default(PENDING)
+  utrNumber       String?
+  rejectionReason String?
+  processedById   String?          @db.ObjectId
+  processedAt     DateTime?
+  createdAt       DateTime         @default(now())
+}
+
+model AdminUser {
+  id             String          @id @default(auto()) @map("_id") @db.ObjectId
+  username       String          @unique
+  passwordHash   String
+  role           AdminRole
+  isActive       Boolean         @default(true)
+  createdById    String?         @db.ObjectId
+  createdBy      AdminUser?      @relation("AdminCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAdmins  AdminUser[]     @relation("AdminCreatedBy")
+  failedAttempts Int             @default(0)
+  lockedUntil    DateTime?
+  lastLoginAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  auditLogs      AdminAuditLog[]
+}
+
+model AdminAuditLog {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  adminId    String    @db.ObjectId
+  admin      AdminUser @relation(fields: [adminId], references: [id])
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime  @default(now())
+}
+
+model BannedPhone {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  phone       String   @unique
+  reason      String?
+  bannedUntil DateTime
+  createdAt   DateTime @default(now())
+}
+
