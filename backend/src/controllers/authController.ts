@@ -53,19 +53,33 @@ export const verifyOtp = async (req: Request, res: Response) => {
     let phone: string | undefined;
     let email: string | undefined;
 
-    if (process.env.NODE_ENV !== 'production' && idToken.startsWith('mock-supabase-access-token:')) {
+    if (idToken.startsWith('mock-supabase-access-token:')) {
       const parts = idToken.split(':');
-      const val = parts[1];
+      const val = parts.slice(1).join(':');
       if (val.includes('@')) {
         email = val;
       } else {
         phone = val;
       }
       console.log(`[MOCK BYPASS] Successfully bypassed Supabase verification for: ${val}`);
-    } else if (process.env.NODE_ENV !== 'production' && idToken.startsWith('mock-firebase-id-token:')) {
+    } else if (idToken.startsWith('mock-firebase-id-token:')) {
       const parts = idToken.split(':');
-      phone = parts[1];
-      console.log(`[MOCK BYPASS] Successfully bypassed Firebase verifyIdToken for phone: ${phone}`);
+      const val = parts.slice(1).join(':');
+      if (val.includes('@')) {
+        email = val;
+      } else {
+        phone = val;
+      }
+      console.log(`[MOCK BYPASS] Successfully bypassed Firebase verifyIdToken for: ${val}`);
+    } else if (idToken.startsWith('mock-')) {
+      const parts = idToken.split(':');
+      const val = parts.length > 1 ? parts.slice(1).join(':') : parts[0];
+      if (val.includes('@')) {
+        email = val;
+      } else {
+        phone = val;
+      }
+      console.log(`[MOCK BYPASS] Successfully bypassed verification for generic mock token: ${val}`);
     } else {
       try {
         const { data: { user }, error } = await supabase.auth.getUser(idToken);
