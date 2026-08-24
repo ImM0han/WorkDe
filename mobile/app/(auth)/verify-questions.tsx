@@ -7,6 +7,7 @@ import { useAuthStore } from '../../src/stores/authStore';
 import { colors, typography, spacing, radius } from '../../src/theme/tokens';
 import { Feather } from '@expo/vector-icons';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
+import { getApiBaseUrl } from '../../src/services/apiClient';
 
 export default function VerifyQuestionsScreen() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function VerifyQuestionsScreen() {
       }
 
       try {
-        const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/security-questions`, {
+        const res = await fetch(`${getApiBaseUrl()}/auth/security-questions`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${otpToken}`,
@@ -73,7 +74,7 @@ export default function VerifyQuestionsScreen() {
 
     setVerifying(true);
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/verify-security-questions`, {
+      const res = await fetch(`${getApiBaseUrl()}/auth/verify-security-questions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

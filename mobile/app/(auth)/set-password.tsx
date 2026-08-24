@@ -8,6 +8,7 @@ import { useAuthStore } from '../../src/stores/authStore';
 import { colors, typography, spacing, radius } from '../../src/theme/tokens';
 import { Feather } from '@expo/vector-icons';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
+import { getApiBaseUrl } from '../../src/services/apiClient';
 
 const checkStrength = (pass: string) => {
   let score = 0;
@@ -45,7 +46,7 @@ export default function SetPasswordScreen() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/set-password`, {
+      const res = await fetch(`${getApiBaseUrl()}/auth/set-password`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

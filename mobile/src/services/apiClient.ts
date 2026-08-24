@@ -1,10 +1,17 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 import { useAuthStore } from '../stores/authStore';
 
+const DEFAULT_API_URL = 'https://gigwork-backend-production-2fa6.up.railway.app';
+
 export function getApiBaseUrl(): string {
-  let url = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000').trim();
+  let url = (
+    process.env.EXPO_PUBLIC_API_URL ||
+    (Constants.expoConfig?.extra as Record<string, string> | undefined)?.EXPO_PUBLIC_API_URL ||
+    DEFAULT_API_URL
+  ).trim();
   url = url.replace(/\/+$/, '');
   url = url.replace(/\/api\/v1$/i, '');
   return url;

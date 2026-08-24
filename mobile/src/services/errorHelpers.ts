@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from './apiClient';
+
 export async function parseResponseJson(res: Response): Promise<any> {
   const text = await res.text();
   try {
@@ -12,7 +14,7 @@ export async function parseResponseJson(res: Response): Promise<any> {
 
 export function getFriendlyErrorMessage(err: any): string {
   const message = err.message || '';
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+  const apiUrl = getApiBaseUrl();
 
   if (message.includes('Unexpected character') || message.includes('JSON Parse error') || message.includes('returned HTML')) {
     return `Server Response Error\n\nThe backend server returned an HTML page instead of JSON.\nTarget URL: ${apiUrl}\nCheck that the backend is running and EXPO_PUBLIC_API_URL is correct.`;

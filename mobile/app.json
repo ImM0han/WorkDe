@@ -80,6 +80,7 @@
       "typedRoutes": true
     },
     "extra": {
+      "EXPO_PUBLIC_API_URL": "https://gigwork-backend-production-2fa6.up.railway.app",
       "router": {},
       "eas": {
         "projectId": "e6e7c180-56aa-4ad2-b569-abbe79671225"

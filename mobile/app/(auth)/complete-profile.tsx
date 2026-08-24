@@ -8,6 +8,7 @@ import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/authStore';
 import { getFriendlyErrorMessage } from '../../src/services/errorHelpers';
+import { getApiBaseUrl } from '../../src/services/apiClient';
 
 const SECURITY_QUESTIONS = [
   "What was the name of your first school?",
@@ -81,7 +82,7 @@ export default function CompleteProfileScreen() {
     try {
       // Create FormData if uploading image, else just JSON
       // For mock phase, we just pass string values
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/register`, {
+      const res = await fetch(`${getApiBaseUrl()}/auth/register`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

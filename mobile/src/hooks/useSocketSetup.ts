@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location';
 import { useAuthStore } from '../stores/authStore';
 import { useSocketStore } from '../stores/socketStore';
+import { getApiBaseUrl } from '../services/apiClient';
 
 export function useSocketSetup() {
   const { user } = useAuthStore();
@@ -18,7 +19,7 @@ export function useSocketSetup() {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token || !mounted) return;
 
-      const socket = io(process.env.EXPO_PUBLIC_API_URL!, {
+      const socket = io(getApiBaseUrl(), {
         auth: { token },
         transports: ['websocket'],
         reconnection: true,

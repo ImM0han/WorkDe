@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import * as SecureStore from 'expo-secure-store';
+import { getApiBaseUrl } from '../services/apiClient';
 
 export let socketInstance: Socket | null = null;
 export const getSocket = () => socketInstance;
@@ -13,7 +14,7 @@ export function useSocket() {
       const token = await SecureStore.getItemAsync('auth_token');
       if (!token) return;
 
-      socketInstance = io(process.env.EXPO_PUBLIC_API_URL!, {
+      socketInstance = io(getApiBaseUrl(), {
         auth: { token },
         reconnection: true,
         reconnectionAttempts: 5,

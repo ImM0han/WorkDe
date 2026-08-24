@@ -7,6 +7,7 @@ import Toast from 'react-native-toast-message';
 import * as SecureStore from 'expo-secure-store';
 import { colors, typography, spacing, radius } from '../../src/theme/tokens';
 import { Feather } from '@expo/vector-icons';
+import { getApiBaseUrl } from '../../src/services/apiClient';
 
 const checkStrength = (pass: string) => {
   let score = 0;
@@ -48,7 +49,7 @@ export default function ChangePasswordScreen() {
     setLoading(true);
     try {
       const token = await SecureStore.getItemAsync('auth_token');
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/change-password`, {
+      const res = await fetch(`${getApiBaseUrl()}/auth/change-password`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
