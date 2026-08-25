@@ -218,6 +218,7 @@ enum Role {
 
 enum KYCStatus {
   PENDING
+  PROCESSING
   VERIFIED
   REJECTED
 }

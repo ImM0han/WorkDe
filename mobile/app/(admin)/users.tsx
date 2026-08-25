@@ -237,6 +237,25 @@ export default function UserKycScreen() {
           )}
         </View>
 
+        {/* Aadhaar KYC Details section if submitted */}
+        {(item.aadhaarNumber || item.dob) && (
+          <View style={{ backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 10, padding: 10, marginBottom: 12 }}>
+            <Text style={{ fontFamily: 'Syne-Bold', fontSize: 12, color: '#92400E', marginBottom: 4 }}>
+              📋 Aadhaar KYC Submitted Details:
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+              <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#78350F' }}>Aadhaar Number:</Text>
+              <Text style={{ fontFamily: 'DMMono-Medium', fontSize: 13, color: '#1C1410' }}>{item.aadhaarNumber || 'N/A'}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+              <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#78350F' }}>Date of Birth:</Text>
+              <Text style={{ fontFamily: 'Nunito-Bold', fontSize: 12, color: '#1C1410' }}>
+                {item.dob ? new Date(item.dob).toLocaleDateString('en-GB') : 'N/A'}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Operation 1: Aadhaar & KYC Verification */}
         <View style={styles.opHeaderRow}>
           <Text style={styles.opHeaderLabel}>OPERATIONS</Text>

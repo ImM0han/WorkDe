@@ -39,7 +39,7 @@ async function getAccessToken(): Promise<string> {
     cachedToken = data.access_token;
     const expiresIn = data.expires_in || 3600;
     tokenExpiresAt = Date.now() + expiresIn * 1000;
-    
+
     console.log('[Sandbox Service] Successfully authenticated and acquired access token.');
     return cachedToken;
   } catch (error: any) {
@@ -126,7 +126,7 @@ export async function verifyAadhaarOtp(clientId: string, otp: string): Promise<A
   // Fallback if credentials are not provided or using mock client
   if (!apiKey || !apiSecret || clientId.startsWith('mock_client_') || forceMock) {
     console.warn('[Sandbox Service] Sandbox API credentials not configured or using simulated client. Simulating Aadhaar verification.');
-    
+
     // Accept any 6 digit code for mock verification
     if (!/^\d{6}$/.test(otp)) {
       throw new Error('Invalid OTP format. Must be 6 digits.');
