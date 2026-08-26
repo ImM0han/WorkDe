@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker } from '../../../components/AppMap';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../src/services/apiClient';
 import { useSocketStore } from '../../../src/stores/socketStore';

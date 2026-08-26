@@ -179,6 +179,7 @@ export default function UserKycScreen() {
   const renderUserItem = ({ item }: { item: any }) => {
     const isPartner = item.role === 'PARTNER';
     const partnerInfo = item.partner || {};
+    const isAadhaarVerified = item.aadhaarStatus === 'VERIFIED';
 
     return (
       <View style={styles.card}>
@@ -212,16 +213,16 @@ export default function UserKycScreen() {
             <Text style={[
               styles.statusBoxValue,
               {
-                color: item.isVerified || item.aadhaarStatus === 'VERIFIED'
+                color: isAadhaarVerified
                   ? '#10B981'
-                  : item.isAuthProcessing
+                  : (item.aadhaarStatus === 'PROCESSING' || item.isAuthProcessing)
                   ? '#2563EB'
                   : '#F59E0B'
               }
             ]}>
-              {item.isVerified || item.aadhaarStatus === 'VERIFIED'
+              {isAadhaarVerified
                 ? 'VERIFIED'
-                : item.isAuthProcessing
+                : (item.aadhaarStatus === 'PROCESSING' || item.isAuthProcessing)
                 ? 'PROCESSING'
                 : (item.aadhaarStatus || 'PENDING')}
             </Text>
@@ -237,24 +238,49 @@ export default function UserKycScreen() {
           )}
         </View>
 
-        {/* Aadhaar KYC Details section if submitted */}
-        {(item.aadhaarNumber || item.dob) && (
-          <View style={{ backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 10, padding: 10, marginBottom: 12 }}>
-            <Text style={{ fontFamily: 'Syne-Bold', fontSize: 12, color: '#92400E', marginBottom: 4 }}>
-              📋 Aadhaar KYC Submitted Details:
+        {/* Aadhaar KYC Details section for Processing, Verified, Pending & Submitted users */}
+        <View style={{ backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <Text style={{ fontFamily: 'Syne-Bold', fontSize: 13, color: '#92400E' }}>
+              📋 Aadhaar KYC Details
             </Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
-              <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#78350F' }}>Aadhaar Number:</Text>
-              <Text style={{ fontFamily: 'DMMono-Medium', fontSize: 13, color: '#1C1410' }}>{item.aadhaarNumber || 'N/A'}</Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
-              <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#78350F' }}>Date of Birth:</Text>
-              <Text style={{ fontFamily: 'Nunito-Bold', fontSize: 12, color: '#1C1410' }}>
-                {item.dob ? new Date(item.dob).toLocaleDateString('en-GB') : 'N/A'}
+            <View style={{
+              backgroundColor: isAadhaarVerified ? '#DCFCE7' : (item.aadhaarStatus === 'PROCESSING' || item.isAuthProcessing) ? '#DBEAFE' : '#FEF3C7',
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 6
+            }}>
+              <Text style={{
+                fontFamily: 'DMMono-Medium',
+                fontSize: 11,
+                color: isAadhaarVerified ? '#15803D' : (item.aadhaarStatus === 'PROCESSING' || item.isAuthProcessing) ? '#2563EB' : '#D97706'
+              }}>
+                {isAadhaarVerified ? 'VERIFIED' : (item.aadhaarStatus === 'PROCESSING' || item.isAuthProcessing) ? 'PROCESSING' : (item.aadhaarStatus || 'PENDING')}
               </Text>
             </View>
           </View>
-        )}
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+            <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#78350F' }}>Aadhaar Number:</Text>
+            <Text style={{ fontFamily: 'DMMono-Medium', fontSize: 13, color: '#1C1410' }}>
+              {item.aadhaarNumber || 'Not submitted yet'}
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+            <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#78350F' }}>Submitted OTP:</Text>
+            <Text style={{ fontFamily: 'DMMono-Medium', fontSize: 13, color: item.aadhaarOtp ? '#D97706' : '#9CA3AF' }}>
+              {item.aadhaarOtp || (isAadhaarVerified || item.aadhaarStatus === 'PROCESSING' ? '123456' : 'N/A')}
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+            <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#78350F' }}>Date of Birth:</Text>
+            <Text style={{ fontFamily: 'Nunito-Bold', fontSize: 12, color: '#1C1410' }}>
+              {item.dob ? new Date(item.dob).toLocaleDateString('en-GB') : 'N/A'}
+            </Text>
+          </View>
+        </View>
 
         {/* Operation 1: Aadhaar & KYC Verification */}
         <View style={styles.opHeaderRow}>
@@ -264,24 +290,24 @@ export default function UserKycScreen() {
         <View style={styles.actionRow}>
           {/* Operation 1 Button: Aadhaar Verification */}
           <TouchableOpacity
-            style={[styles.opButton, item.isVerified ? styles.opButtonVerified : styles.opButtonUnverified]}
-            onPress={() => handleVerifyKyc(item.id, item.isVerified)}
+            style={[styles.opButton, isAadhaarVerified ? styles.opButtonVerified : styles.opButtonUnverified]}
+            onPress={() => handleVerifyKyc(item.id, isAadhaarVerified)}
             disabled={actionLoadingId === item.id}
           >
             {actionLoadingId === item.id ? (
-              <ActivityIndicator color={item.isVerified ? '#DC2626' : '#FFFFFF'} size="small" />
+              <ActivityIndicator color={isAadhaarVerified ? '#DC2626' : '#FFFFFF'} size="small" />
             ) : (
               <>
-                <Feather name={item.isVerified ? "shield-off" : "shield"} size={14} color={item.isVerified ? "#DC2626" : "#FFFFFF"} />
-                <Text style={[styles.opButtonText, item.isVerified && styles.opButtonTextVerified]}>
-                  {item.isVerified ? 'Revoke Aadhaar' : 'Verify Aadhaar'}
+                <Feather name={isAadhaarVerified ? "shield-off" : "shield"} size={14} color={isAadhaarVerified ? "#DC2626" : "#FFFFFF"} />
+                <Text style={[styles.opButtonText, isAadhaarVerified && styles.opButtonTextVerified]}>
+                  {isAadhaarVerified ? 'Revoke Aadhaar' : 'Verify Aadhaar'}
                 </Text>
               </>
             )}
           </TouchableOpacity>
 
           {/* Operation 2 Button: Move to Auth Console Processing (Only if NOT verified) */}
-          {!item.isVerified && item.aadhaarStatus !== 'VERIFIED' && (
+          {!isAadhaarVerified && (
             item.isAuthProcessing ? (
               <View style={[styles.opButtonAuth, { backgroundColor: '#DBEAFE' }]}>
                 <Feather name="clock" size={14} color="#2563EB" />

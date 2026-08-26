@@ -45,8 +45,12 @@
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -85,6 +89,12 @@
       "eas": {
         "projectId": "e6e7c180-56aa-4ad2-b569-abbe79671225"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e6e7c180-56aa-4ad2-b569-abbe79671225"
     }
   }
 }

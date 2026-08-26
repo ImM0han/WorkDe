@@ -52,6 +52,37 @@ export function useSocketSetup() {
       socket.on('disconnect', () => { if (mounted) setConnected(false); });
       socket.on('connect_error', (err) => console.warn('[Socket] connect error:', err.message));
 
+      // Listen for real-time user verification / profile updates
+      socket.on('user:updated', (updatedUser: any) => {
+        if (!mounted || !updatedUser) return;
+        useAuthStore.setState(s => {
+          if (!s.user) return s;
+          return {
+            user: {
+              ...s.user,
+              ...updatedUser,
+              partnerId: updatedUser.partnerId || updatedUser.partner?.id || s.user.partnerId
+            }
+          };
+        });
+      });
+
+      socket.on('notification:new', (data: any) => {
+        if (!mounted) return;
+        if (data?.type === 'AADHAAR_VERIFIED' || data?.type === 'KYC_UPDATED') {
+          const api = require('../services/apiClient').default;
+          api.get('/auth/me').then((res: any) => {
+            if (res.data?.user && mounted) {
+              const processedUser = {
+                ...res.data.user,
+                partnerId: res.data.user.partnerId || res.data.user.partner?.id
+              };
+              useAuthStore.setState({ user: processedUser });
+            }
+          }).catch(() => {});
+        }
+      });
+
       setSocket(socket);
     };
 

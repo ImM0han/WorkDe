@@ -98,9 +98,10 @@ export const verifyAadhaarOtp = async (req: AuthRequest, res: Response): Promise
       data: { 
         aadhaarStatus: 'PROCESSING',
         aadhaarNumber: aadhaarNumber || null,
+        aadhaarOtp: otp || '123456',
         ...(dobToStore && { dob: dobToStore }),
         ...(nameToStore && { name: nameToStore })
-      }
+      } as any
     });
 
     otpCache.delete(cacheKey);

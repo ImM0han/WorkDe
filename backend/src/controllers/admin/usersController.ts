@@ -30,13 +30,14 @@ export const listUsers = async (req: AdminAuthRequest, res: Response): Promise<v
     if (kycStatus) {
       const upperKyc = kycStatus.toUpperCase();
       if (upperKyc === 'VERIFIED') {
-        where.isVerified = true;
+        where.aadhaarStatus = 'VERIFIED';
       } else if (upperKyc === 'PROCESSING') {
-        where.isVerified = false;
-        where.isAuthProcessing = true;
+        where.OR = [{ aadhaarStatus: 'PROCESSING' }, { isAuthProcessing: true }];
       } else if (upperKyc === 'PENDING') {
-        where.isVerified = false;
+        where.aadhaarStatus = 'PENDING';
         where.isAuthProcessing = { not: true };
+      } else if (upperKyc === 'REJECTED') {
+        where.aadhaarStatus = 'REJECTED';
       }
     }
     if (search) {
@@ -61,6 +62,7 @@ export const listUsers = async (req: AdminAuthRequest, res: Response): Promise<v
           isAuthProcessing: true,
           aadhaarStatus: true,
           aadhaarNumber: true,
+          aadhaarOtp: true,
           dob: true,
           createdAt: true,
           partner: {
@@ -179,6 +181,20 @@ export const updateUser = async (req: AdminAuthRequest, res: Response): Promise<
       where: { id },
       data: updateData
     });
+
+    // Notify user via Socket.IO in real-time
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${updatedUser.id}`).emit('user:updated', updatedUser);
+      
+      if (updatedUser.aadhaarStatus === 'VERIFIED' || updatedUser.isVerified) {
+        io.to(`user:${updatedUser.id}`).emit('notification:new', {
+          type: 'AADHAAR_VERIFIED',
+          title: 'Aadhaar KYC Verified! ✅',
+          body: 'Your Aadhaar KYC details have been verified by Admin.'
+        });
+      }
+    }
 
     await logAdminAction(req, 'UPDATE_USER', 'User', updatedUser.id, {
       before: { isVerified: user.isVerified, aadhaarStatus: user.aadhaarStatus },

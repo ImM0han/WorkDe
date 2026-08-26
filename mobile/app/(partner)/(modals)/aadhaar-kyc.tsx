@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import * as Clipboard from 'expo-clipboard';
 import api from '../../../src/services/apiClient';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../../src/stores/authStore';
@@ -12,10 +13,29 @@ export default function AadhaarKycModal() {
   const [step, setStep] = useState(1);
   const [aadhaar, setAadhaar] = useState('');
   const [otp, setOtp] = useState('');
+  const [currentOtp, setCurrentOtp] = useState('123456');
   const [dob, setDob] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      api.get('/auth/me')
+        .then(res => {
+          if (res.data?.user) {
+            const processedUser = {
+              ...res.data.user,
+              partnerId: res.data.user.partnerId || res.data.user.partner?.id
+            };
+            useAuthStore.setState({ user: processedUser });
+          }
+        })
+        .catch(err => {
+          console.warn('[Aadhaar KYC Modal] Refresh user error:', err);
+        });
+    }, [])
+  );
 
   const cleanAadhaar = aadhaar.replace(/\D/g, '');
 
@@ -37,21 +57,22 @@ export default function AadhaarKycModal() {
         dob: dob.toISOString() 
       });
       const returnedSession = res.data.sessionId || `session_${Date.now()}`;
+      const otpVal = res.data.otp || '123456';
       setSessionId(returnedSession);
+      setCurrentOtp(otpVal);
       setStep(2);
       
-      const otpVal = res.data.otp || '123456';
       Toast.show({
         type: 'info',
-        text1: 'Verification OTP (Dev)',
-        text2: `Mock OTP: ${otpVal}`,
+        text1: step === 2 ? 'OTP Resent 🔄' : 'Verification OTP Sent 📩',
+        text2: `Aadhaar OTP: ${otpVal} (Tap Copy to copy)`,
         visibilityTime: 8000,
       });
     } catch (err: any) {
       console.error(err);
-      // Fallback for dev / offline mode if server endpoint unreachable
       if (err.message === 'Network Error' || !err.response) {
         setSessionId(`dev_mock_${Date.now()}`);
+        setCurrentOtp('123456');
         setStep(2);
         Toast.show({
           type: 'info',
@@ -72,6 +93,15 @@ export default function AadhaarKycModal() {
     }
   };
 
+  const handleCopyOtp = async () => {
+    await Clipboard.setStringAsync(currentOtp);
+    Toast.show({
+      type: 'success',
+      text1: 'OTP Copied! 📋',
+      text2: `Aadhaar OTP ${currentOtp} copied to clipboard.`,
+    });
+  };
+
   const handleVerify = async () => {
     setIsSubmitting(true);
     try {
@@ -85,7 +115,6 @@ export default function AadhaarKycModal() {
           finalStatus = res.data.aadhaarStatus;
         }
       } catch (err: any) {
-        // If dev mock OTP 123456 or 6 digits entered during network issue
         if ((err.message === 'Network Error' || !err.response) && /^\d{6}$/.test(otp.trim())) {
           success = true;
           finalStatus = 'PROCESSING';
@@ -102,6 +131,7 @@ export default function AadhaarKycModal() {
               ...s.user,
               aadhaarStatus: finalStatus,
               aadhaarNumber: cleanAadhaar || s.user.aadhaarNumber,
+              aadhaarOtp: otp.trim() || s.user.aadhaarOtp || currentOtp,
               dob: dob ? dob.toISOString() : s.user.dob
             }
           };
@@ -143,7 +173,9 @@ export default function AadhaarKycModal() {
     }
   };
 
-  if (user?.aadhaarStatus === 'VERIFIED') {
+  const isVerifiedUser = user?.aadhaarStatus === 'VERIFIED';
+
+  if (isVerifiedUser) {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Aadhaar KYC</Text>
@@ -158,7 +190,14 @@ export default function AadhaarKycModal() {
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Aadhaar Number</Text>
             <Text style={styles.infoValue}>
-              {user?.aadhaarNumber ? `XXXX XXXX ${user.aadhaarNumber.slice(-4)}` : 'Verified Aadhaar'}
+              {user?.aadhaarNumber ? user.aadhaarNumber : 'Verified Aadhaar'}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Verification OTP</Text>
+            <Text style={[styles.infoValue, { fontFamily: 'DMMono-Medium', color: '#15803D' }]}>
+              {user?.aadhaarOtp || '123456'}
             </Text>
           </View>
 
@@ -167,6 +206,11 @@ export default function AadhaarKycModal() {
             <Text style={styles.infoValue}>
               {user?.dob ? new Date(user.dob).toLocaleDateString('en-GB') : 'N/A'}
             </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Status</Text>
+            <Text style={[styles.infoValue, { color: '#15803D' }]}>VERIFIED</Text>
           </View>
         </View>
 
@@ -197,7 +241,14 @@ export default function AadhaarKycModal() {
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Aadhaar Number</Text>
             <Text style={styles.infoValue}>
-              {user?.aadhaarNumber ? `XXXX XXXX ${user.aadhaarNumber.slice(-4)}` : 'Submitted Aadhaar'}
+              {user?.aadhaarNumber ? user.aadhaarNumber : 'Submitted Aadhaar'}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Submitted OTP</Text>
+            <Text style={[styles.infoValue, { fontFamily: 'DMMono-Medium', color: '#D97706' }]}>
+              {user?.aadhaarOtp || '123456'}
             </Text>
           </View>
 
@@ -278,6 +329,35 @@ export default function AadhaarKycModal() {
       {step === 2 && (
         <View style={styles.form}>
           <Text style={styles.label}>Enter OTP</Text>
+
+          {/* Resend Copyable OTP Card */}
+          <View style={{ backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 14, padding: 14, marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontFamily: 'Syne-Bold', fontSize: 13, color: '#92400E' }}>🔑 Aadhaar Verification OTP</Text>
+              <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 11, color: '#B45309' }}>Copyable Form</Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FCD34D', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
+              <Text style={{ fontFamily: 'DMMono-Medium', fontSize: 22, color: '#1C1410', letterSpacing: 3 }}>{currentOtp}</Text>
+              
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity 
+                  onPress={handleCopyOtp}
+                  style={{ backgroundColor: '#FEF3C7', borderBottomWidth: 1, borderColor: '#FDE68A', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                >
+                  <Text style={{ fontFamily: 'Nunito-Bold', fontSize: 12, color: '#92400E' }}>📋 Copy</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  onPress={() => setOtp(currentOtp)}
+                  style={{ backgroundColor: '#FF6B1A', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                >
+                  <Text style={{ fontFamily: 'Nunito-Bold', fontSize: 12, color: '#FFFFFF' }}>Fill OTP</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
           <TextInput
             style={styles.input}
             placeholder="6-digit OTP"
@@ -287,14 +367,22 @@ export default function AadhaarKycModal() {
             value={otp}
             onChangeText={setOtp}
           />
-          <Text style={styles.helper}>Enter OTP sent to your Aadhaar number (Dev Mock OTP: 123456).</Text>
+          
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 4 }}>
+            <Text style={[styles.helper, { marginBottom: 0 }]}>Didn't receive OTP?</Text>
+            <TouchableOpacity onPress={handleInitiate} disabled={isSubmitting}>
+              <Text style={{ fontFamily: 'Nunito-Bold', fontSize: 13, color: '#FF6B1A', textDecorationLine: 'underline' }}>
+                {isSubmitting ? 'Resending...' : 'Send OTP Again'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity style={styles.submitBtnWrapper} disabled={otp.length !== 6 || isSubmitting} onPress={handleVerify}>
             <LinearGradient colors={otp.length !== 6 || isSubmitting ? ['#C4B5A5', '#C4B5A5'] : ['#FF6B1A', '#F59E0B']} style={styles.submitBtn}>
               {isSubmitting ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.submitText}>Verify & Submit KYC</Text>
+                <Text style={styles.submitText}>Submit for Verification</Text>
               )}
             </LinearGradient>
           </TouchableOpacity>

@@ -101,19 +101,30 @@ export default function ProfileScreen() {
 
         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(partner)/(modals)/aadhaar-kyc')}>
           <Text style={styles.menuText}>{t('profile.kyc')}</Text>
-          <View style={[
-            styles.badge,
-            user?.aadhaarStatus === 'VERIFIED' ? { backgroundColor: '#DCFCE7' } :
-            user?.aadhaarStatus === 'REJECTED' ? { backgroundColor: '#FEE2E2' } : { backgroundColor: '#FFF0D6' }
-          ]}>
-            <Text style={[
-              styles.badgeText,
-              user?.aadhaarStatus === 'VERIFIED' ? { color: '#15803D' } :
-              user?.aadhaarStatus === 'REJECTED' ? { color: '#B91C1C' } : { color: '#FF6B1A' }
-            ]}>
-              {user?.aadhaarStatus || 'PENDING'}
-            </Text>
-          </View>
+          {(() => {
+            const isKycVerified = user?.aadhaarStatus === 'VERIFIED';
+            const isKycProcessing = !isKycVerified && (user?.aadhaarStatus === 'PROCESSING' || (user as any)?.isAuthProcessing);
+            const isKycRejected = user?.aadhaarStatus === 'REJECTED';
+            const displayStatus = isKycVerified ? 'VERIFIED' : isKycProcessing ? 'PROCESSING' : isKycRejected ? 'REJECTED' : 'PENDING';
+
+            return (
+              <View style={[
+                styles.badge,
+                isKycVerified ? { backgroundColor: '#DCFCE7' } :
+                isKycProcessing ? { backgroundColor: '#FEF3C7' } :
+                isKycRejected ? { backgroundColor: '#FEE2E2' } : { backgroundColor: '#FFF0D6' }
+              ]}>
+                <Text style={[
+                  styles.badgeText,
+                  isKycVerified ? { color: '#15803D' } :
+                  isKycProcessing ? { color: '#D97706' } :
+                  isKycRejected ? { color: '#B91C1C' } : { color: '#FF6B1A' }
+                ]}>
+                  {displayStatus}
+                </Text>
+              </View>
+            );
+          })()}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(partner)/(modals)/wallet')}>

@@ -7,7 +7,7 @@ import {
   groupJobCategories, femaleOnlyCategories, seasonalCategories, 
   materialCategories, categoryRateDefaults 
 } from '../../src/theme/tokens';
-import MapView, { Marker, Region } from 'react-native-maps';
+import MapView, { Marker, Region } from '../../components/AppMap';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';

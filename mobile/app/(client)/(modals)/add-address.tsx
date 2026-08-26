@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker } from '../../../components/AppMap';
 import * as Location from 'expo-location';
 import api from '../../../src/services/apiClient';
 import { useLocationStore } from '../../../src/stores/locationStore';

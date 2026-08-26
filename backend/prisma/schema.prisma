@@ -20,6 +20,7 @@ model User {
   isDeleted     Boolean   @default(false)
   aadhaarStatus KYCStatus @default(PENDING)
   aadhaarNumber String?
+  aadhaarOtp    String?
   dob           DateTime?
   pushToken     String?
   createdAt     DateTime  @default(now())

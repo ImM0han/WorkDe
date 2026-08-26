@@ -11,8 +11,9 @@ export interface User {
   avatarUrl?: string;
   role: 'PARTNER' | 'CLIENT';
   isVerified: boolean;
-  aadhaarStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  aadhaarStatus: 'PENDING' | 'PROCESSING' | 'VERIFIED' | 'REJECTED';
   aadhaarNumber?: string;
+  aadhaarOtp?: string;
   dob?: string;
   partnerId?: string;
   partner?: {
