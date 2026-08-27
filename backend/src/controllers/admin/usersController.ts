@@ -16,8 +16,13 @@ export const listUsers = async (req: AdminAuthRequest, res: Response): Promise<v
     const aadhaarStatus = req.query.aadhaarStatus as KYCStatus | undefined;
     const kycStatus = req.query.kycStatus as string | undefined;
     const search = req.query.search as string | undefined;
+    const includeDeleted = req.query.includeDeleted === 'true';
 
     const where: any = {};
+    if (!includeDeleted) {
+      where.isDeleted = false;
+    }
+
     if (role && (role === 'CLIENT' || role === 'PARTNER')) {
       where.role = role;
     }
@@ -244,6 +249,21 @@ export const deleteUser = async (req: AdminAuthRequest, res: Response): Promise<
         phone: targetPhone ? `[BANNED_${Date.now()}]_${targetPhone}` : null
       } as any
     });
+
+    try {
+      await prisma.partner.updateMany({
+        where: { userId: id },
+        data: { isOnline: false }
+      });
+    } catch (e) {}
+
+    try {
+      const { getIO } = await import('../../socket');
+      const io = getIO();
+      if (io) {
+        io.to(`user:${user.id}`).emit('user:deleted', { message: 'Your account has been deleted by Admin.' });
+      }
+    } catch (e) {}
 
     await logAdminAction(req, 'DELETE_USER', 'User', user.id, { originalName: user.name });
 

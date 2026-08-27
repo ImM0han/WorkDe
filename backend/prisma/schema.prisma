@@ -272,7 +272,10 @@ enum WithdrawalStatus {
   PENDING
   PROCESSING
   PAID
+  COMPLETED
+  FAILED
   REJECTED
+  CANCELLED
 }
 
 enum AdminRole {

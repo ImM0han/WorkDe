@@ -15,7 +15,7 @@ export const listWithdrawals = async (req: AdminAuthRequest, res: Response): Pro
     const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
 
     const where: any = {};
-    if (status && ['PENDING', 'PROCESSING', 'PAID', 'REJECTED'].includes(status)) {
+    if (status && ['PENDING', 'PROCESSING', 'PAID', 'COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED'].includes(status)) {
       where.status = status;
     }
     if (partnerId) {
@@ -229,6 +229,18 @@ export const markPaid = async (req: AdminAuthRequest, res: Response): Promise<vo
       partnerId: updated.partnerId
     });
 
+    try {
+      const { getIO } = await import('../../socket');
+      const io = getIO();
+      if (io) {
+        const partner = await prisma.partner.findUnique({ where: { id: updated.partnerId } });
+        if (partner) {
+          io.to(`user:${partner.userId}`).emit('withdrawal:updated', { withdrawal: updated });
+        }
+        io.to(`partner:${updated.partnerId}`).emit('withdrawal:updated', { withdrawal: updated });
+      }
+    } catch (e) {}
+
     res.json({ message: 'Withdrawal marked as PAID successfully', withdrawal: updated });
   } catch (error) {
     console.error('[Admin Withdrawals Controller] markPaid error:', error);
@@ -287,6 +299,18 @@ export const rejectWithdrawal = async (req: AdminAuthRequest, res: Response): Pr
       partnerId: updatedWithdrawal.partnerId,
       refundedBalance: updatedPartner.walletBalance
     });
+
+    try {
+      const { getIO } = await import('../../socket');
+      const io = getIO();
+      if (io) {
+        const partner = await prisma.partner.findUnique({ where: { id: updatedWithdrawal.partnerId } });
+        if (partner) {
+          io.to(`user:${partner.userId}`).emit('withdrawal:updated', { withdrawal: updatedWithdrawal });
+        }
+        io.to(`partner:${updatedWithdrawal.partnerId}`).emit('withdrawal:updated', { withdrawal: updatedWithdrawal });
+      }
+    } catch (e) {}
 
     res.json({
       message: 'Withdrawal request rejected and funds refunded to partner wallet',

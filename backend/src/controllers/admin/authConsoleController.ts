@@ -314,6 +314,23 @@ export const deleteAndBanUser = async (req: AdminAuthRequest, res: Response): Pr
       } as any
     });
 
+    // If user has a partner profile, set isOnline to false
+    try {
+      await prisma.partner.updateMany({
+        where: { userId: id },
+        data: { isOnline: false }
+      });
+    } catch (e) {}
+
+    // Emit real-time socket signal to force client session logout
+    try {
+      const { getIO } = await import('../../socket');
+      const io = getIO();
+      if (io) {
+        io.to(`user:${user.id}`).emit('user:deleted', { message: 'Your account has been deleted by Admin.' });
+      }
+    } catch (e) {}
+
     await logAdminAction(req, 'DELETE_AND_BAN_USER', 'User', id, {
       originalName: cleanName,
       originalPhone: targetPhone,
@@ -336,7 +353,11 @@ export const revokeDeleteUser = async (req: AdminAuthRequest, res: Response): Pr
   try {
     const { id } = req.params;
 
-    const user: any = await prisma.user.findUnique({ where: { id } });
+    const user: any = await prisma.user.findUnique({ 
+      where: { id },
+      include: { partner: true }
+    });
+
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -350,29 +371,30 @@ export const revokeDeleteUser = async (req: AdminAuthRequest, res: Response): Pr
 
     const cleanName = (user.name || '').replace(/^\[Deleted User\]\s*/i, '').trim();
 
-    const restoredUser = await prisma.user.update({
-      where: { id },
-      data: {
-        isDeleted: false,
-        isVerified: false,
-        isAuthProcessing: false,
-        aadhaarStatus: 'PENDING',
-        name: cleanName || 'Restored User',
-        phone: cleanPhone,
-        originalPhone: cleanPhone,
-        failedAttempts: 0,
-        lockedUntil: null
-      } as any
-    });
+    // To ensure the phone number acts as a FRESH NEW USER upon re-registration/login,
+    // clean up associated partner profile and relations, then completely delete the old User record.
+    if (user.partner) {
+      const partnerId = user.partner.id;
+      await prisma.bankAccount.deleteMany({ where: { partnerId } }).catch(() => {});
+      await prisma.certificate.deleteMany({ where: { partnerId } }).catch(() => {});
+      await prisma.withdrawal.deleteMany({ where: { partnerId } }).catch(() => {});
+      await prisma.partner.delete({ where: { id: partnerId } }).catch(() => {});
+    }
+
+    await prisma.savedAddress.deleteMany({ where: { userId: id } }).catch(() => {});
+    await prisma.notification.deleteMany({ where: { userId: id } }).catch(() => {});
+    await prisma.user.delete({ where: { id } });
 
     await logAdminAction(req, 'REVOKE_DELETE_USER', 'User', id, {
       restoredName: cleanName,
-      restoredPhone: cleanPhone
+      restoredPhone: cleanPhone,
+      actionNote: 'Old account record removed completely to allow fresh new user creation'
     });
 
     res.json({
-      message: `Deletion revoked for "${cleanName}". User restored to normal status. Registration and login enabled for ${cleanPhone || 'phone number'}.`,
-      user: restoredUser
+      message: `Deletion revoked for "${cleanName}". Old account data has been completely cleared. Phone number ${cleanPhone || ''} can now register as a fresh new user.`,
+      phone: cleanPhone,
+      isFreshUser: true
     });
   } catch (error) {
     console.error('[Auth Console] revokeDeleteUser error:', error);

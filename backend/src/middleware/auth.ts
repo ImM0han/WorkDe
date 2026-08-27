@@ -23,15 +23,21 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
-    if (decoded && decoded.role === 'PARTNER' && !decoded.partnerId) {
+    if (decoded && decoded.id) {
       try {
         const { prisma } = await import('../utils/prisma');
-        const partner = await prisma.partner.findUnique({ where: { userId: decoded.id } });
-        if (partner) {
-          decoded.partnerId = partner.id;
+        const userRecord = await prisma.user.findUnique({
+          where: { id: decoded.id },
+          select: { isDeleted: true, partner: { select: { id: true } } }
+        });
+        if (!userRecord || userRecord.isDeleted) {
+          return res.status(403).json({ error: 'Account has been deleted or deactivated' });
+        }
+        if (decoded.role === 'PARTNER' && !decoded.partnerId && userRecord.partner) {
+          decoded.partnerId = userRecord.partner.id;
         }
       } catch (e) {
-        console.error('Error looking up partnerId in auth middleware:', e);
+        console.error('Error looking up user in auth middleware:', e);
       }
     }
     req.user = decoded;

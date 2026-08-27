@@ -52,6 +52,12 @@ export function useSocketSetup() {
       socket.on('disconnect', () => { if (mounted) setConnected(false); });
       socket.on('connect_error', (err) => console.warn('[Socket] connect error:', err.message));
 
+      // Listen for user deletion event from admin console
+      socket.on('user:deleted', (data: any) => {
+        if (!mounted) return;
+        useAuthStore.getState().logout();
+      });
+
       // Listen for real-time user verification / profile updates
       socket.on('user:updated', (updatedUser: any) => {
         if (!mounted || !updatedUser) return;

@@ -68,7 +68,8 @@ export async function findPartnersNearJob(
     const partners = await prisma.partner.findMany({
       where: {
         lastLat: { not: null },
-        lastLng: { not: null }
+        lastLng: { not: null },
+        user: { isDeleted: false }
       }
     });
     return partners
@@ -91,7 +92,8 @@ export async function findPartnersNearJobWithDistance(
     const partners = await prisma.partner.findMany({
       where: {
         lastLat: { not: null },
-        lastLng: { not: null }
+        lastLng: { not: null },
+        user: { isDeleted: false }
       }
     });
     return partners

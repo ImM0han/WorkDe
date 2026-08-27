@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
+import React, { useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../../src/services/apiClient';
@@ -16,23 +16,46 @@ export default function WalletScreen() {
 
   const partnerIdToUse = user?.partnerId || user?.partner?.id;
 
-  const { data: partnerData } = useQuery({
+  const { data: partnerData, refetch: refetchProfile } = useQuery({
     queryKey: ['partnerProfile', partnerIdToUse],
     queryFn: () => api.get(`/partner/${partnerIdToUse}`).then(r => r.data),
     enabled: !!partnerIdToUse
   });
 
-  const { data: txns } = useQuery({
+  const { data: txns, refetch: refetchTxns, isFetching } = useQuery({
     queryKey: ['transactions', partnerIdToUse],
-    queryFn: () => api.get('/wallet/transactions').then(r => r.data).catch(() => [])
+    queryFn: () => api.get('/wallet/transactions').then(r => r.data).catch((err) => {
+      console.warn('Failed to fetch transactions:', err?.response?.data || err.message);
+      return [];
+    })
   });
 
+  useFocusEffect(
+    useCallback(() => {
+      refetchProfile();
+      refetchTxns();
+    }, [refetchProfile, refetchTxns])
+  );
+
   useEffect(() => {
-    socket?.on('payment:received', (data) => {
+    if (!socket) return;
+    
+    const handleUpdate = () => {
       queryClient.invalidateQueries({ queryKey: ['partnerProfile', partnerIdToUse] });
       queryClient.invalidateQueries({ queryKey: ['transactions', partnerIdToUse] });
-    });
-    return () => { socket?.off('payment:received'); };
+    };
+
+    socket.on('payment:received', handleUpdate);
+    socket.on('job:paid', handleUpdate);
+    socket.on('withdrawal:created', handleUpdate);
+    socket.on('withdrawal:updated', handleUpdate);
+
+    return () => { 
+      socket.off('payment:received', handleUpdate);
+      socket.off('job:paid', handleUpdate);
+      socket.off('withdrawal:created', handleUpdate);
+      socket.off('withdrawal:updated', handleUpdate);
+    };
   }, [socket, partnerIdToUse, queryClient]);
 
   const transactions = txns || [];
@@ -43,7 +66,19 @@ export default function WalletScreen() {
         <Text style={styles.headerTitle}>{t('wallet.earnings') || 'Earnings & Wallet'}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView 
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl 
+            refreshing={isFetching} 
+            onRefresh={() => {
+              refetchProfile();
+              refetchTxns();
+            }} 
+            tintColor="#FF6B1A" 
+          />
+        }
+      >
         <LinearGradient colors={['#1A0C02', '#CC4A00', '#FF6B1A', '#FF8C42']} style={styles.walletCard}>
           <Text style={styles.balanceLabel}>{t('wallet.availableBalance') || 'Available Balance'}</Text>
           <Text style={styles.balanceAmount}>₹{partnerData?.walletBalance?.toFixed(2) || '0.00'}</Text>
@@ -80,7 +115,7 @@ export default function WalletScreen() {
               </View>
             </View>
             <Text style={[styles.txnAmount, { color: txn.type === 'CREDIT' ? '#166534' : '#1C1410' }]}>
-              {txn.type === 'CREDIT' ? '+' : '-'}₹{Math.abs(txn.amount || txn.netAmount).toFixed(2)}
+              {txn.type === 'CREDIT' ? '+' : '-'}₹{Math.abs(Number(txn.amount ?? txn.netAmount ?? 0)).toFixed(2)}
             </Text>
           </TouchableOpacity>
         )))}

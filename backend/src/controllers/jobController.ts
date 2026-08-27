@@ -335,11 +335,15 @@ export const completeJob = async (req: AuthRequest, res: Response): Promise<void
       const { getIO } = await import('../socket');
       const io = getIO();
       if (io && updatedJob.partner) {
-        io.to(`user:${updatedJob.partner.userId}`).emit('job:paid', {
+        const payload = {
           jobId: updatedJob.id,
           amount: updatedJob.billableAmount || updatedJob.rate,
           message: 'Payment completed! Funds credited to your wallet.'
-        });
+        };
+        io.to(`user:${updatedJob.partner.userId}`).emit('job:paid', payload);
+        io.to(`user:${updatedJob.partner.userId}`).emit('payment:received', payload);
+        io.to(`partner:${updatedJob.partnerId}`).emit('payment:received', payload);
+        io.to(`partner:${updatedJob.partnerId}`).emit('job:paid', payload);
       }
 
       res.json(updatedJob);

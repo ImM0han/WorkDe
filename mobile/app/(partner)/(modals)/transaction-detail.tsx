@@ -41,6 +41,22 @@ export default function TransactionDetailModal() {
     );
   }
 
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'COMPLETED':
+      case 'PAID':
+        return { color: '#166534', backgroundColor: '#DCFCE7' };
+      case 'PENDING':
+      case 'PROCESSING':
+        return { color: '#9A3412', backgroundColor: '#FFEDD5' };
+      case 'REJECTED':
+      case 'FAILED':
+        return { color: '#991B1B', backgroundColor: '#FEE2E2' };
+      default:
+        return { color: '#374151', backgroundColor: '#F3F4F6' };
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Transaction Details</Text>
@@ -52,10 +68,7 @@ export default function TransactionDetailModal() {
         <Text style={[styles.amount, { color: txn.type === 'CREDIT' ? '#166534' : '#1C1410' }]}>
           {txn.type === 'CREDIT' ? '+' : '-'}₹{Math.abs(txn.amount)}
         </Text>
-        <Text style={[styles.status, { 
-          color: txn.status === 'COMPLETED' ? '#22C55E' : '#EF4444',
-          backgroundColor: txn.status === 'COMPLETED' ? '#DCFCE7' : '#FEE2E2'
-        }]}>
+        <Text style={[styles.status, getStatusStyle(txn.status)]}>
           {txn.status}
         </Text>
       </View>

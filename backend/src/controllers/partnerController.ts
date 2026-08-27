@@ -324,6 +324,7 @@ export const getNearbyPartners = async (req: AuthRequest, res: Response): Promis
     const partners = await prisma.partner.findMany({
       where: {
         id: { in: partnerIds },
+        user: { isDeleted: false },
         ...(category ? { skills: { has: category } } : {}),
       },
       include: {

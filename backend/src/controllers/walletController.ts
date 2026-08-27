@@ -3,9 +3,18 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import axios from 'axios';
 
+const resolvePartnerId = async (req: AuthRequest): Promise<string | null> => {
+  if (req.user?.partnerId) return req.user.partnerId;
+  if (req.user?.id) {
+    const partner = await prisma.partner.findUnique({ where: { userId: req.user.id } });
+    if (partner) return partner.id;
+  }
+  return null;
+};
+
 export const getBalance = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const partnerId = req.user?.partnerId;
+    const partnerId = await resolvePartnerId(req);
     if (!partnerId) {
       res.status(400).json({ error: 'Partner not found' });
       return;
@@ -20,30 +29,41 @@ export const getBalance = async (req: AuthRequest, res: Response): Promise<void>
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const todayPayments = await prisma.payment.aggregate({
+    const partnerJobs = await prisma.job.findMany({
       where: {
-        job: { partnerId },
+        OR: [
+          { partnerId },
+          { partnerIds: { has: partnerId } }
+        ]
+      },
+      select: { id: true }
+    });
+    const partnerJobIds = partnerJobs.map(j => j.id);
+
+    const todayPayments = partnerJobIds.length > 0 ? await prisma.payment.aggregate({
+      where: {
+        jobId: { in: partnerJobIds },
         status: 'COMPLETED',
         createdAt: { gte: startOfToday }
       },
       _sum: { netAmount: true }
-    });
+    }) : { _sum: { netAmount: 0 } };
 
-    const weekPayments = await prisma.payment.aggregate({
+    const weekPayments = partnerJobIds.length > 0 ? await prisma.payment.aggregate({
       where: {
-        job: { partnerId },
+        jobId: { in: partnerJobIds },
         status: 'COMPLETED',
         createdAt: { gte: startOfWeek }
       },
       _sum: { netAmount: true }
-    });
+    }) : { _sum: { netAmount: 0 } };
 
-    const payments = await prisma.payment.findMany({
-      where: { job: { partnerId }, status: 'COMPLETED' },
+    const payments = partnerJobIds.length > 0 ? await prisma.payment.findMany({
+      where: { jobId: { in: partnerJobIds }, status: 'COMPLETED' },
       include: { job: { select: { category: true } } },
       orderBy: { createdAt: 'desc' },
       take: 10
-    });
+    }) : [];
 
     const withdrawals = await prisma.withdrawal.findMany({
       where: { partnerId },
@@ -53,15 +73,17 @@ export const getBalance = async (req: AuthRequest, res: Response): Promise<void>
 
     const credits = payments.map(p => ({
       id: p.id,
-      amount: p.netAmount,
+      amount: p.netAmount ?? p.amount ?? 0,
+      netAmount: p.netAmount ?? p.amount ?? 0,
       type: 'CREDIT',
-      title: `Payment for ${p.job.category}`,
+      title: `Payment for ${p.job?.category || 'Service'}`,
       createdAt: p.createdAt
     }));
 
     const debits = withdrawals.map(w => ({
       id: w.id,
-      amount: w.amount,
+      amount: w.amount ?? 0,
+      netAmount: w.amount ?? 0,
       type: 'DEBIT',
       title: `Withdrawal to ${w.bankAccount || 'Bank'}`,
       bankAccount: w.bankAccount,
@@ -82,13 +104,14 @@ export const getBalance = async (req: AuthRequest, res: Response): Promise<void>
       transactions
     });
   } catch (error) {
+    console.error('getBalance error:', error);
     res.status(500).json({ error: 'Failed to fetch wallet balance' });
   }
 };
 
 export const withdrawFunds = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const partnerId = req.user?.partnerId;
+    const partnerId = await resolvePartnerId(req);
     const { amount, bankId } = req.body;
 
     if (!partnerId) {
@@ -164,6 +187,16 @@ export const withdrawFunds = async (req: AuthRequest, res: Response): Promise<vo
       })
     ]);
 
+    // Notify partner socket rooms
+    try {
+      const { getIO } = await import('../socket');
+      const io = getIO();
+      if (io) {
+        io.to(`user:${partner.userId}`).emit('withdrawal:created', { withdrawal: newWithdrawal });
+        io.to(`partner:${partnerId}`).emit('withdrawal:created', { withdrawal: newWithdrawal });
+      }
+    } catch (e) {}
+
     res.json({
       message: 'Withdrawal request submitted successfully',
       withdrawal: {
@@ -183,7 +216,7 @@ export const withdrawFunds = async (req: AuthRequest, res: Response): Promise<vo
 
 export const addBankAccount = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const partnerId = req.user?.partnerId;
+    const partnerId = await resolvePartnerId(req);
     const { accountNumber, ifsc, holderName } = req.body;
 
     if (!partnerId) {
@@ -209,51 +242,100 @@ export const addBankAccount = async (req: AuthRequest, res: Response): Promise<v
 
 export const getTransactions = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const partnerId = req.user?.partnerId;
+    const partnerId = await resolvePartnerId(req);
     if (!partnerId) {
       res.status(400).json({ error: 'Partner not found' });
       return;
     }
 
-    const payments = await prisma.payment.findMany({
+    // 1. Fetch all jobs belonging to this partner
+    const partnerJobs = await prisma.job.findMany({
       where: {
-        job: {
-          partnerId: partnerId
-        },
-        status: 'COMPLETED'
+        OR: [
+          { partnerId: partnerId },
+          { partnerIds: { has: partnerId } }
+        ]
+      },
+      select: {
+        id: true,
+        category: true,
+        rate: true,
+        billableAmount: true,
+        status: true,
+        completedAt: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const partnerJobIds = partnerJobs.map(j => j.id);
+
+    // 2. Fetch payments linked to partner's job IDs
+    const payments = partnerJobIds.length > 0 ? await prisma.payment.findMany({
+      where: {
+        jobId: { in: partnerJobIds }
       },
       include: {
         job: {
           select: {
-            category: true
+            id: true,
+            category: true,
+            rate: true,
+            billableAmount: true,
+            status: true
           }
         }
       },
       orderBy: {
         createdAt: 'desc'
       }
-    });
+    }) : [];
 
+    // 3. Fetch withdrawals for partner
     const withdrawals = await prisma.withdrawal.findMany({
-      where: {
-        partnerId: partnerId
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
+      where: { partnerId: partnerId },
+      orderBy: { createdAt: 'desc' }
     });
 
-    const credits = payments.map(p => ({
-      id: p.id,
-      amount: p.netAmount,
-      type: 'CREDIT',
-      title: `Payment for ${p.job.category}`,
-      createdAt: p.createdAt
-    }));
+    const paymentJobIds = new Set(payments.map(p => p.jobId));
+
+    const paymentCredits = payments.map(p => {
+      const amt = p.netAmount ?? p.amount ?? 0;
+      return {
+        id: p.id,
+        jobId: p.jobId,
+        amount: amt,
+        netAmount: amt,
+        type: 'CREDIT',
+        title: `Payment for ${p.job?.category || 'Service'}`,
+        createdAt: p.createdAt,
+        status: p.status === 'COMPLETED' ? 'COMPLETED' : (p.job?.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING')
+      };
+    });
+
+    // Add completed or pending-payment jobs that don't have a Payment model record yet
+    const missingJobCredits = partnerJobs
+      .filter(j => ['COMPLETED', 'COMPLETED_PENDING_PAYMENT'].includes(j.status) && !paymentJobIds.has(j.id))
+      .map(j => {
+        const amt = j.billableAmount || j.rate || 0;
+        return {
+          id: `job_${j.id}`,
+          jobId: j.id,
+          amount: amt,
+          netAmount: amt,
+          type: 'CREDIT',
+          title: `Payment for ${j.category || 'Service'}`,
+          createdAt: j.completedAt || j.createdAt,
+          status: j.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING'
+        };
+      });
 
     const debits = withdrawals.map(w => ({
       id: w.id,
-      amount: w.amount,
+      amount: w.amount ?? 0,
+      netAmount: w.amount ?? 0,
       type: 'DEBIT',
       title: `Withdrawal to ${w.bankAccount || 'Bank'}`,
       bankAccount: w.bankAccount,
@@ -263,7 +345,7 @@ export const getTransactions = async (req: AuthRequest, res: Response): Promise<
       createdAt: w.createdAt
     }));
 
-    const transactions = [...credits, ...debits].sort(
+    const transactions = [...paymentCredits, ...missingJobCredits, ...debits].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
@@ -276,7 +358,7 @@ export const getTransactions = async (req: AuthRequest, res: Response): Promise<
 
 export const getTransactionById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const partnerId = req.user?.partnerId;
+    const partnerId = await resolvePartnerId(req);
     const { id } = req.params;
 
     if (!partnerId) {
@@ -284,12 +366,40 @@ export const getTransactionById = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
+    // Check synthetic job ID (job_xxx)
+    if (id.startsWith('job_')) {
+      const realJobId = id.replace(/^job_/, '');
+      const job = await prisma.job.findFirst({
+        where: {
+          id: realJobId,
+          OR: [
+            { partnerId: partnerId },
+            { partnerIds: { has: partnerId } }
+          ]
+        }
+      });
+      if (job) {
+        res.json({
+          id: `job_${job.id}`,
+          amount: job.billableAmount || job.rate || 0,
+          type: 'CREDIT',
+          title: `Payment for ${job.category || 'Service'}`,
+          createdAt: job.completedAt || job.createdAt,
+          status: job.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING'
+        });
+        return;
+      }
+    }
+
     // Check payments
     const payment = await prisma.payment.findFirst({
       where: {
         id,
         job: {
-          partnerId
+          OR: [
+            { partnerId: partnerId },
+            { partnerIds: { has: partnerId } }
+          ]
         }
       },
       include: {
@@ -306,7 +416,7 @@ export const getTransactionById = async (req: AuthRequest, res: Response): Promi
         id: payment.id,
         amount: payment.netAmount,
         type: 'CREDIT',
-        title: `Payment for ${payment.job.category}`,
+        title: `Payment for ${payment.job?.category || 'Service'}`,
         createdAt: payment.createdAt,
         status: payment.status
       });

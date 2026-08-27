@@ -47,9 +47,9 @@ export const processPaymentSuccess = async (
   const netAmount = grossAmount;
 
   await prisma.$transaction([
-    prisma.payment.update({
+    prisma.payment.upsert({
       where: { jobId },
-      data: { 
+      update: { 
         status: 'COMPLETED', 
         razorpayPaymentId, 
         method,
@@ -57,6 +57,15 @@ export const processPaymentSuccess = async (
         platformFee,
         netAmount
       },
+      create: {
+        jobId,
+        status: 'COMPLETED',
+        razorpayPaymentId,
+        method,
+        amount: grossAmount,
+        platformFee,
+        netAmount
+      }
     }),
     prisma.partner.update({
       where: { id: job.partnerId! },
@@ -74,6 +83,11 @@ export const processPaymentSuccess = async (
     const io = getIO();
     if (io) {
       io.to(`user:${job.partner.userId}`).emit('payment:received', {
+        amount: netAmount,
+        jobId,
+        transactionId: razorpayPaymentId,
+      });
+      io.to(`partner:${job.partnerId}`).emit('payment:received', {
         amount: netAmount,
         jobId,
         transactionId: razorpayPaymentId,
