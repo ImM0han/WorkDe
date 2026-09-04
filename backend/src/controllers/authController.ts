@@ -19,21 +19,24 @@ export const sendOtp = async (req: Request, res: Response) => {
     if (!phone && !email) return res.status(400).json({ error: 'Phone number or email is required' });
 
     let user = null;
+    const targetRole = role ? (role.toUpperCase() as 'PARTNER' | 'CLIENT') : undefined;
+
     if (phone) {
       const banCheck = await checkPhoneBanned(phone);
       if (banCheck.isBanned) {
         return res.status(403).json({ error: banCheck.message });
       }
-      user = await prisma.user.findFirst({ where: { phone } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { phone, role: targetRole } });
+      } else {
+        user = await prisma.user.findFirst({ where: { phone } });
+      }
     } else if (email) {
-      user = await prisma.user.findFirst({ where: { email } });
-    }
-
-    if (user && role && user.role !== role.toUpperCase()) {
-      const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
-      return res.status(400).json({ 
-        error: `This account is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
-      });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { email, role: targetRole } });
+      } else {
+        user = await prisma.user.findFirst({ where: { email } });
+      }
     }
 
     const isExistingUser = !!user;
@@ -99,24 +102,31 @@ export const verifyOtp = async (req: Request, res: Response) => {
     }
 
     let user = null;
+    const targetRole = role ? (role.toUpperCase() as 'PARTNER' | 'CLIENT') : undefined;
+
     if (phone) {
       const banCheck = await checkPhoneBanned(phone);
       if (banCheck.isBanned) {
         return res.status(403).json({ error: banCheck.message });
       }
-      user = await prisma.user.findFirst({ where: { phone }, include: { partner: true } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { phone, role: targetRole }, include: { partner: true } });
+      } else {
+        user = await prisma.user.findFirst({ where: { phone }, include: { partner: true } });
+      }
     } else if (email) {
-      user = await prisma.user.findFirst({ where: { email }, include: { partner: true } });
-    }
-    
-    if (user && role && user.role !== role.toUpperCase()) {
-      const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
-      return res.status(400).json({ 
-        error: `This account is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
-      });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { email, role: targetRole }, include: { partner: true } });
+      } else {
+        user = await prisma.user.findFirst({ where: { email }, include: { partner: true } });
+      }
     }
 
-    const otpToken = jwt.sign({ phone, email, role: role ? role.toUpperCase() : user?.role }, OTP_TOKEN_SECRET, { expiresIn: '15m' });
+    const otpToken = jwt.sign(
+      { phone, email, role: targetRole || user?.role }, 
+      OTP_TOKEN_SECRET, 
+      { expiresIn: '15m' }
+    );
 
     if (!user) {
       return res.status(200).json({ isNewUser: true, otpToken, verified: true });
@@ -146,6 +156,7 @@ export const setPassword = async (req: Request, res: Response) => {
 
     const { password } = req.body;
     const { phone, email, role } = decoded;
+    const targetRole = role ? (role.toUpperCase() as 'PARTNER' | 'CLIENT') : undefined;
 
     if (!password || password.length < 8) return res.status(400).json({ error: 'Invalid password' });
 
@@ -153,9 +164,17 @@ export const setPassword = async (req: Request, res: Response) => {
 
     let user = null;
     if (phone) {
-      user = await prisma.user.findFirst({ where: { phone }, include: { partner: true } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { phone, role: targetRole }, include: { partner: true } });
+      } else {
+        user = await prisma.user.findFirst({ where: { phone }, include: { partner: true } });
+      }
     } else if (email) {
-      user = await prisma.user.findFirst({ where: { email }, include: { partner: true } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { email, role: targetRole }, include: { partner: true } });
+      } else {
+        user = await prisma.user.findFirst({ where: { email }, include: { partner: true } });
+      }
     }
 
     if (user && user.securityQuestions) {
@@ -170,13 +189,6 @@ export const setPassword = async (req: Request, res: Response) => {
     let isNewUser = false;
     
     if (user) {
-      if (role && user.role !== role.toUpperCase()) {
-        const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
-        return res.status(400).json({ 
-          error: `This account is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
-        });
-      }
-
       user = await prisma.user.update({
         where: { id: user.id },
         data: { passwordHash },
@@ -184,11 +196,12 @@ export const setPassword = async (req: Request, res: Response) => {
       });
     } else {
       isNewUser = true;
+      const userRole = targetRole || 'CLIENT';
       user = await prisma.user.create({
-        data: { phone, email, passwordHash, role: role || 'CLIENT', name: '' },
+        data: { phone, email, passwordHash, role: userRole, name: '' },
         include: { partner: true }
       });
-      if (role === 'PARTNER') {
+      if (userRole === 'PARTNER') {
         const partner = await prisma.partner.create({ data: { userId: user.id } });
         user.partner = partner;
       }
@@ -252,26 +265,29 @@ export const loginPassword = async (req: Request, res: Response) => {
     }
 
     let user = null;
+    const targetRole = role ? (role.toUpperCase() as 'PARTNER' | 'CLIENT') : undefined;
+
     if (phone) {
       const banCheck = await checkPhoneBanned(phone);
       if (banCheck.isBanned) {
         return res.status(403).json({ error: banCheck.message });
       }
-      user = await prisma.user.findFirst({ where: { phone }, include: { partner: true } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { phone, role: targetRole }, include: { partner: true } });
+      } else {
+        user = await prisma.user.findFirst({ where: { phone }, include: { partner: true } });
+      }
     } else if (email) {
-      user = await prisma.user.findFirst({ where: { email }, include: { partner: true } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { email, role: targetRole }, include: { partner: true } });
+      } else {
+        user = await prisma.user.findFirst({ where: { email }, include: { partner: true } });
+      }
     }
 
     if (!user || !user.passwordHash) {
       await recordFailedAttempt(identifier);
       return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    if (role && user.role !== role.toUpperCase()) {
-      const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
-      return res.status(400).json({ 
-        error: `This account is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
-      });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
@@ -296,21 +312,24 @@ export const forgotPassword = async (req: Request, res: Response) => {
     if (!phone && !email) return res.status(400).json({ error: 'Phone number or email is required' });
 
     let user = null;
+    const targetRole = role ? (role.toUpperCase() as 'PARTNER' | 'CLIENT') : undefined;
+
     if (phone) {
-      user = await prisma.user.findFirst({ where: { phone } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { phone, role: targetRole } });
+      } else {
+        user = await prisma.user.findFirst({ where: { phone } });
+      }
     } else if (email) {
-      user = await prisma.user.findFirst({ where: { email } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { email, role: targetRole } });
+      } else {
+        user = await prisma.user.findFirst({ where: { email } });
+      }
     }
 
     if (!user) {
-      return res.status(404).json({ error: 'Account does not exist. Please register first.' });
-    }
-
-    if (role && user.role !== role.toUpperCase()) {
-      const existingRoleLabel = user.role === 'PARTNER' ? 'Partner' : 'Client';
-      return res.status(400).json({ 
-        error: `This account is registered as a ${existingRoleLabel}. Please select ${existingRoleLabel} role to continue.` 
-      });
+      return res.status(404).json({ error: 'Account does not exist for this role. Please register first.' });
     }
 
     return res.status(200).json({ message: 'User verification successful' });
@@ -349,6 +368,7 @@ export const register = async (req: Request, res: Response) => {
     const { name, email, phone: bodyPhone, avatarUrl, gender, securityQuestions } = req.body;
     const phone = decoded.phone || bodyPhone;
     const decodedEmail = decoded.email;
+    const targetRole = decoded.role ? (decoded.role.toUpperCase() as 'PARTNER' | 'CLIENT') : 'CLIENT';
 
     if (phone) {
       const banCheck = await checkPhoneBanned(phone);
@@ -384,9 +404,9 @@ export const register = async (req: Request, res: Response) => {
     if (decoded.id) {
       user = await prisma.user.findUnique({ where: { id: decoded.id }, include: { partner: true } });
     } else if (phone) {
-      user = await prisma.user.findFirst({ where: { phone }, include: { partner: true } });
+      user = await prisma.user.findFirst({ where: { phone, role: targetRole }, include: { partner: true } });
     } else if (decodedEmail) {
-      user = await prisma.user.findFirst({ where: { email: decodedEmail }, include: { partner: true } });
+      user = await prisma.user.findFirst({ where: { email: decodedEmail, role: targetRole }, include: { partner: true } });
     }
 
     if (user) {
@@ -410,7 +430,7 @@ export const register = async (req: Request, res: Response) => {
           email: email || decodedEmail, 
           name, 
           avatarUrl, 
-          role: decoded.role || 'CLIENT', 
+          role: targetRole, 
           isVerified: true, 
           gender,
           ...(securityQuestionsData && { securityQuestions: securityQuestionsData })
@@ -519,12 +539,22 @@ export const getUserSecurityQuestions = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid or expired temp token' });
     }
 
-    const { phone, email } = decoded;
+    const { phone, email, role } = decoded;
+    const targetRole = role ? (role.toUpperCase() as 'PARTNER' | 'CLIENT') : undefined;
+
     let user = null;
     if (phone) {
-      user = await prisma.user.findFirst({ where: { phone } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { phone, role: targetRole } });
+      } else {
+        user = await prisma.user.findFirst({ where: { phone } });
+      }
     } else if (email) {
-      user = await prisma.user.findFirst({ where: { email } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { email, role: targetRole } });
+      } else {
+        user = await prisma.user.findFirst({ where: { email } });
+      }
     }
 
     if (!user) {
@@ -558,6 +588,7 @@ export const verifySecurityQuestions = async (req: Request, res: Response) => {
     }
 
     const { phone, email, role } = decoded;
+    const targetRole = role ? (role.toUpperCase() as 'PARTNER' | 'CLIENT') : undefined;
     const { question, answer } = req.body;
 
     if (!question || !answer) {
@@ -566,9 +597,17 @@ export const verifySecurityQuestions = async (req: Request, res: Response) => {
 
     let user = null;
     if (phone) {
-      user = await prisma.user.findFirst({ where: { phone } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { phone, role: targetRole } });
+      } else {
+        user = await prisma.user.findFirst({ where: { phone } });
+      }
     } else if (email) {
-      user = await prisma.user.findFirst({ where: { email } });
+      if (targetRole) {
+        user = await prisma.user.findFirst({ where: { email, role: targetRole } });
+      } else {
+        user = await prisma.user.findFirst({ where: { email } });
+      }
     }
 
     if (!user) {

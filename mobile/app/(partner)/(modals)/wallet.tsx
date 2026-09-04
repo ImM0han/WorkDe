@@ -60,6 +60,24 @@ export default function WalletScreen() {
 
   const transactions = txns || [];
 
+  const getStatusBadge = (status?: string) => {
+    const s = (status || 'COMPLETED').toUpperCase();
+    switch (s) {
+      case 'COMPLETED':
+      case 'PAID':
+      case 'SUCCESS':
+        return { label: 'Completed', color: '#166534', backgroundColor: '#DCFCE7' };
+      case 'PENDING':
+      case 'PROCESSING':
+        return { label: s === 'PROCESSING' ? 'Processing' : 'Pending', color: '#9A3412', backgroundColor: '#FFEDD5' };
+      case 'REJECTED':
+      case 'FAILED':
+        return { label: s === 'REJECTED' ? 'Rejected' : 'Failed', color: '#991B1B', backgroundColor: '#FEE2E2' };
+      default:
+        return { label: s, color: '#374151', backgroundColor: '#F3F4F6' };
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -99,26 +117,35 @@ export default function WalletScreen() {
             {t('wallet.noTransactions') || 'No transactions yet.'}
           </Text>
         ) : (
-          transactions.map((txn: any) => (
-          <TouchableOpacity 
-            key={txn.id} 
-            style={styles.txnRow}
-            onPress={() => router.push(`/(partner)/(modals)/transaction-detail?txnId=${txn.id}`)}
-          >
-            <View style={styles.txnLeft}>
-              <View style={[styles.iconWrapper, { backgroundColor: txn.type === 'CREDIT' ? '#DCFCE7' : '#FEE2E2' }]}>
-                <Text style={styles.icon}>{txn.type === 'CREDIT' ? '↓' : '↑'}</Text>
-              </View>
-              <View style={styles.txnTextWrapper}>
-                <Text style={styles.txnTitle} numberOfLines={1} ellipsizeMode="tail">{txn.title}</Text>
-                <Text style={styles.txnDate}>{txn.date || new Date(txn.createdAt).toLocaleDateString()}</Text>
-              </View>
-            </View>
-            <Text style={[styles.txnAmount, { color: txn.type === 'CREDIT' ? '#166534' : '#1C1410' }]}>
-              {txn.type === 'CREDIT' ? '+' : '-'}₹{Math.abs(Number(txn.amount ?? txn.netAmount ?? 0)).toFixed(2)}
-            </Text>
-          </TouchableOpacity>
-        )))}
+          transactions.map((txn: any) => {
+            const badge = getStatusBadge(txn.status);
+            return (
+              <TouchableOpacity 
+                key={txn.id} 
+                style={styles.txnRow}
+                onPress={() => router.push(`/(partner)/(modals)/transaction-detail?txnId=${txn.id}`)}
+              >
+                <View style={styles.txnLeft}>
+                  <View style={[styles.iconWrapper, { backgroundColor: txn.type === 'CREDIT' ? '#DCFCE7' : '#FEE2E2' }]}>
+                    <Text style={styles.icon}>{txn.type === 'CREDIT' ? '↓' : '↑'}</Text>
+                  </View>
+                  <View style={styles.txnTextWrapper}>
+                    <Text style={styles.txnTitle} numberOfLines={1} ellipsizeMode="tail">{txn.title}</Text>
+                    <Text style={styles.txnDate}>{txn.date || new Date(txn.createdAt).toLocaleDateString()}</Text>
+                  </View>
+                </View>
+                <View style={styles.txnRight}>
+                  <Text style={[styles.txnAmount, { color: txn.type === 'CREDIT' ? '#166534' : '#1C1410' }]}>
+                    {txn.type === 'CREDIT' ? '+' : '-'}₹{Math.abs(Number(txn.amount ?? txn.netAmount ?? 0)).toFixed(2)}
+                  </Text>
+                  <View style={[styles.statusBadge, { backgroundColor: badge.backgroundColor }]}>
+                    <Text style={[styles.statusBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
     </View>
   );
@@ -143,5 +170,8 @@ const styles = StyleSheet.create({
   txnTextWrapper: { flex: 1, marginRight: 4 },
   txnTitle: { fontFamily: 'Nunito-Bold', fontSize: 14, color: '#1C1410' },
   txnDate: { fontFamily: 'DMMono-Regular', fontSize: 12, color: '#C4B5A5', marginTop: 2 },
-  txnAmount: { fontFamily: 'DMMono-Medium', fontSize: 15, fontWeight: '800', textAlign: 'right', minWidth: 65 }
+  txnRight: { alignItems: 'flex-end' },
+  txnAmount: { fontFamily: 'DMMono-Medium', fontSize: 15, fontWeight: '800', textAlign: 'right' },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginTop: 4 },
+  statusBadgeText: { fontFamily: 'Nunito-Bold', fontSize: 10, textTransform: 'uppercase' }
 });

@@ -49,6 +49,14 @@ export default function ClientHome() {
     })();
   }, []);
 
+  const { data: clientJobs } = useQuery({
+    queryKey: ['clientJobs'],
+    queryFn: () => api.get('/jobs/client').then(r => r.data),
+    staleTime: 15_000,
+  });
+
+  const pendingPaymentJob = clientJobs?.find((j: any) => j.status === 'COMPLETED_PENDING_PAYMENT');
+
   const { data: partners, isLoading } = useQuery({
     queryKey: ['nearbyPartners', userLocation, selectedCategory],
     queryFn: () => api.get('/partner/nearby', {
@@ -92,6 +100,21 @@ export default function ClientHome() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {pendingPaymentJob && (
+          <View style={styles.unsettledBanner}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.unsettledTitle}>⚠️ Payment Pending</Text>
+              <Text style={styles.unsettledSub}>Work completed for {pendingPaymentJob.category}. Job is not settled yet.</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.payNowBtn}
+              onPress={() => router.push({ pathname: '/(client)/(modals)/payment-method', params: { jobId: pendingPaymentJob.id } })}
+            >
+              <Text style={styles.payNowText}>Pay Now</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <Text style={styles.sectionTitle}>{t('clientHome.categories') || 'Categories'}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
           <CategoryPill 
@@ -151,5 +174,40 @@ const styles = StyleSheet.create({
   pillText: { fontFamily: typography.fontBody, fontSize: 14 },
   pillTextActive: { color: '#FF6B1A', fontFamily: 'Nunito-Bold' },
   pillTextInactive: { color: '#6B5C4E', fontFamily: 'Nunito-SemiBold' },
-  loadingText: { fontFamily: typography.fontBody, textAlign: 'center', marginTop: 20, color: colors.textMuted }
+  loadingText: { fontFamily: typography.fontBody, textAlign: 'center', marginTop: 20, color: colors.textMuted },
+  unsettledBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0D6',
+    borderWidth: 1.5,
+    borderColor: '#FF6B1A',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: 12,
+  },
+  unsettledTitle: {
+    fontFamily: typography.fontDisplay,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FF6B1A',
+    marginBottom: 2,
+  },
+  unsettledSub: {
+    fontFamily: typography.fontBody,
+    fontSize: 13,
+    color: '#6B5C4E',
+  },
+  payNowBtn: {
+    backgroundColor: colors.success,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: radius.sm,
+  },
+  payNowText: {
+    fontFamily: typography.fontDisplay,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  }
 });

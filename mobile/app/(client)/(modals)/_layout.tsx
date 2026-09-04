@@ -2,7 +2,15 @@ import { Stack } from 'expo-router';
 
 export default function ClientModalsLayout() {
   return (
-    <Stack screenOptions={{ presentation: 'modal', headerShown: false }}>
+    <Stack 
+      screenOptions={{ 
+        presentation: 'modal', 
+        animation: 'slide_from_bottom',
+        animationDuration: 220,
+        gestureEnabled: true,
+        headerShown: false 
+      }}
+    >
       <Stack.Screen name="partner-profile" />
       <Stack.Screen name="search-filter" />
       <Stack.Screen name="reviews-detail" />

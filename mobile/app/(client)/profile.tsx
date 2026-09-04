@@ -37,7 +37,7 @@ export default function ClientProfileScreen() {
 
   const handleLogout = async () => {
     await logout();
-    router.replace('/(auth)/onboarding');
+    router.replace('/(auth)/role-select');
   };
 
   return (

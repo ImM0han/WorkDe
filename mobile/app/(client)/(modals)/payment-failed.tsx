@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function PaymentFailed() {
   const router = useRouter();
-  const { error } = useLocalSearchParams<{ error?: string }>();
+  const { error, jobId, rate } = useLocalSearchParams<{ error?: string; jobId?: string; rate?: string }>();
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -14,17 +14,35 @@ export default function PaymentFailed() {
         <Text style={styles.crossIcon}>✕</Text>
       </View>
 
-      <Text style={styles.title}>Payment Failed</Text>
+      <Text style={styles.title}>Payment Not Completed</Text>
       <Text style={styles.subtitle}>
-        {error || "We couldn't process your payment. Please try a different payment method."}
+        {error || "The payment was not completed. The job remains unsettled until payment is finalized."}
       </Text>
 
-      <TouchableOpacity style={styles.retryBtn} onPress={() => router.replace('/(client)/(modals)/payment-method')}>
-        <Text style={styles.retryText}>Try Again</Text>
+      <TouchableOpacity 
+        style={styles.retryBtn} 
+        onPress={() => {
+          if (jobId) {
+            router.replace({ pathname: '/(client)/(modals)/payment-method', params: { jobId, rate } });
+          } else {
+            router.replace('/(client)/jobs');
+          }
+        }}
+      >
+        <Text style={styles.retryText}>Pay Now to Settle Job</Text>
       </TouchableOpacity>
       
-      <TouchableOpacity style={styles.cancelBtn} onPress={() => router.dismissAll()}>
-        <Text style={styles.cancelText}>Cancel</Text>
+      <TouchableOpacity 
+        style={styles.cancelBtn} 
+        onPress={() => {
+          if (jobId) {
+            router.replace({ pathname: '/(client)/(modals)/job-detail', params: { id: jobId } });
+          } else {
+            router.replace('/(client)/jobs');
+          }
+        }}
+      >
+        <Text style={styles.cancelText}>View Job Details</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );

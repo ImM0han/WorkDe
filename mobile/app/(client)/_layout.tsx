@@ -12,6 +12,8 @@ export default function ClientLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
+        animation: 'fade',
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#EEE0CC',

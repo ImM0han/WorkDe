@@ -273,6 +273,14 @@ export default function JobDetailScreen() {
             </Text>
           </View>
         )}
+        {job?.status === 'COMPLETED_PENDING_PAYMENT' && (
+          <View style={[styles.startRequestBanner, { backgroundColor: '#FFF0D6', borderColor: '#FF6B1A' }]}>
+            <Ionicons name="alert-circle" size={22} color="#FF6B1A" />
+            <Text style={[styles.startRequestBannerText, { color: '#C44D00' }]}>
+              Payment Pending: Work is completed but payment is not settled yet. Please tap "Pay Now to Settle Job" below.
+            </Text>
+          </View>
+        )}
         {['IN_PROGRESS', 'EXTENDED'].includes(job?.status) && (
           <View style={styles.activeTimerBanner}>
             <Ionicons name="time" size={20} color="#047857" />
@@ -483,7 +491,7 @@ export default function JobDetailScreen() {
                 })}
               >
                 <Feather name="credit-card" size={16} color="#FFFFFF" />
-                <Text style={styles.completeJobText}>Pay Final Amount</Text>
+                <Text style={styles.completeJobText}>Pay Now to Settle Job</Text>
               </TouchableOpacity>
             </View>
           </View>
