@@ -296,3 +296,111 @@ export const handleRazorpayWebhook = async (req: Request, res: Response): Promis
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * Render hosted HTML page with Razorpay Checkout JS script for web/browser fallback.
+ */
+export const renderCheckoutPage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orderId, amount, jobId, name, email, contact } = req.query;
+
+    if (!orderId || !amount || !jobId) {
+      res.status(400).send('Missing required payment parameters');
+      return;
+    }
+
+    const keyId = process.env.RAZORPAY_KEY_ID || 'rzp_test_TZtFjRx85UYAef';
+    const amountInPaise = Math.round(parseFloat(amount as string) * 100);
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>WorkDe Secure Payment</title>
+  <style>
+    body {
+      background-color: #0F172A;
+      color: #FFFFFF;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.1);
+      border-left-color: #FF6B1A;
+      border-radius: 50%;
+      width: 48px;
+      height: 48px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 24px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    h2 { font-size: 20px; font-weight: 700; margin: 0 0 8px 0; }
+    p { font-size: 14px; color: #94A3B8; margin: 0; }
+  </style>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+  <div class="spinner"></div>
+  <h2>Opening Razorpay Payment Gateway</h2>
+  <p>Please complete your payment in the checkout window...</p>
+
+  <script>
+    var options = {
+      "key": "${keyId}",
+      "amount": "${amountInPaise}",
+      "currency": "INR",
+      "name": "WorkDe",
+      "description": "Payment for Job #${jobId}",
+      "order_id": "${orderId}",
+      "prefill": {
+        "name": ${JSON.stringify(name || 'Client')},
+        "email": ${JSON.stringify(email || 'test@example.com')},
+        "contact": ${JSON.stringify(contact || '9999999999')}
+      },
+      "theme": { "color": "#FF6B1A" },
+      "handler": function (response) {
+        var redirectUrl = "workde://payment-success?jobId=${jobId}"
+          + "&razorpay_order_id=" + encodeURIComponent(response.razorpay_order_id || '')
+          + "&razorpay_payment_id=" + encodeURIComponent(response.razorpay_payment_id || '')
+          + "&razorpay_signature=" + encodeURIComponent(response.razorpay_signature || '');
+        window.location.href = redirectUrl;
+      },
+      "modal": {
+        "ondismiss": function() {
+          window.location.href = "workde://payment-cancelled?jobId=${jobId}";
+        }
+      }
+    };
+
+    var rzp = new Razorpay(options);
+    rzp.on('payment.failed', function (resp) {
+      var err = (resp.error && resp.error.description) ? resp.error.description : 'Payment Failed';
+      window.location.href = "workde://payment-failed?jobId=${jobId}&error=" + encodeURIComponent(err);
+    });
+
+    window.onload = function() {
+      rzp.open();
+    };
+  </script>
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (err: any) {
+    console.error('[Payment Controller] renderCheckoutPage error:', err);
+    res.status(500).send('Failed to load payment checkout page');
+  }
+};
+

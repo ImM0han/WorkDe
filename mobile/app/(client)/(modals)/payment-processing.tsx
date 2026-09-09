@@ -1,49 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, BackHandler, NativeModules, TouchableOpacity } from 'react-native';
-import { colors, typography, spacing, radius } from '../../../src/theme/tokens';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, BackHandler } from 'react-native';
+import { colors, typography, spacing } from '../../../src/theme/tokens';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import RazorpayCheckout from 'react-native-razorpay';
+import * as WebBrowser from 'expo-web-browser';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '../../../src/services/apiClient';
 import { useAuthStore } from '../../../src/stores/authStore';
 import Toast from 'react-native-toast-message';
-import { Feather } from '@expo/vector-icons';
 
 export default function PaymentProcessing() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { jobId, rate } = useLocalSearchParams<{ jobId: string; rate: string }>();
 
-  const [orderId, setOrderId] = useState('');
-  const [showDevFallback, setShowDevFallback] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  const handleSimulatePayment = async (orderIdFromInitiate?: string) => {
-    setIsProcessing(true);
-    try {
-      console.log('[Payment Processing] Explicitly simulating payment success...');
-      const targetOrderId = orderIdFromInitiate || orderId || `order_simulated_${Math.random().toString(36).substring(2, 9)}`;
-      const fakePaymentId = `pay_simulated_${Math.random().toString(36).substring(2, 9)}`;
-      
-      await api.post('/payments/confirm', {
-        razorpayOrderId: targetOrderId,
-        razorpayPaymentId: fakePaymentId,
-        razorpaySignature: 'simulated_payment_sig',
-        jobId
-      });
-
-      queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
-      queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
-      router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
-    } catch (simErr: any) {
-      console.error('[Payment Processing] Simulated payment failed:', simErr.message);
-      router.replace({
-        pathname: '/(client)/(modals)/payment-failed',
-        params: { error: simErr.response?.data?.error || 'Simulated payment failed', jobId, rate }
-      });
-    } finally {
-      setIsProcessing(false);
-    }
+  const getQueryParam = (urlStr: string, param: string) => {
+    const match = new RegExp('[?&]' + param + '=([^&]*)').exec(urlStr);
+    return match ? decodeURIComponent(match[1]) : null;
   };
 
   useEffect(() => {
@@ -99,7 +72,6 @@ export default function PaymentProcessing() {
         
         if (orderRes.data) {
           fetchedOrderId = orderRes.data.orderId;
-          setOrderId(fetchedOrderId);
           rzpKey = orderRes.data.razorpayKeyId;
           currencyVal = orderRes.data.currency || currencyVal;
         }
@@ -112,36 +84,12 @@ export default function PaymentProcessing() {
         return;
       }
 
-      // Check if native Razorpay C++/Java module is linked in binary
-      const hasNativeRazorpay = !!(
-        NativeModules?.RazorpayCheckout ||
-        NativeModules?.RazorpayCheckoutModule ||
-        NativeModules?.Razorpay
-      );
-
-      let rzpModule: any = null;
-      try {
-        if (hasNativeRazorpay && RazorpayCheckout && typeof (RazorpayCheckout as any).open === 'function') {
-          rzpModule = RazorpayCheckout;
-        } else if (hasNativeRazorpay && (RazorpayCheckout as any)?.default && typeof (RazorpayCheckout as any).default.open === 'function') {
-          rzpModule = (RazorpayCheckout as any).default;
-        }
-      } catch (checkErr) {
-        rzpModule = null;
-      }
-
-      if (!rzpModule) {
-        console.log('[Payment Processing] Native Razorpay SDK not linked in build. Showing fallback option...');
-        setShowDevFallback(true);
-        return;
-      }
-
       const options = {
         description: `Payment for Job #${jobId}`,
         currency: currencyVal,
         key: rzpKey,
-        amount: (rateVal * 100).toFixed(0),
-        name: 'GigWork',
+        amount: Math.round(rateVal * 100).toString(),
+        name: 'WorkDe',
         order_id: fetchedOrderId,
         theme: { color: '#FF6B1A' },
         prefill: {
@@ -151,9 +99,14 @@ export default function PaymentProcessing() {
         }
       };
 
+      // 2. Attempt Native Razorpay SDK checkout first
       try {
-        console.log('[Payment Processing] Opening Razorpay checkout SDK...');
-        const paymentResult = await rzpModule.open(options);
+        if (!RazorpayCheckout || typeof (RazorpayCheckout as any).open !== 'function') {
+          throw new TypeError("Native RazorpayCheckout module is unlinked in Expo Go environment.");
+        }
+
+        console.log('[Payment Processing] Opening Native Razorpay checkout SDK...');
+        const paymentResult = await RazorpayCheckout.open(options);
         console.log('[Payment Processing] Razorpay checkout success:', paymentResult);
 
         // Confirm payment on backend
@@ -167,29 +120,90 @@ export default function PaymentProcessing() {
         queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
         queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
         router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
+        return;
       } catch (e: any) {
-        console.warn('[Payment Processing] Razorpay Checkout error or cancellation:', e);
-        
-        const errStr = (e?.message || e?.description || '').toString().toLowerCase();
+        const errStr = (e?.message || e?.description || '').toString();
+        const isCancelled = e && (e.code === 2 || errStr.toLowerCase().includes('cancelled') || errStr.toLowerCase().includes('cancel'));
 
-        if (e && (e.code === 2 || errStr.includes('cancelled') || errStr.includes('cancel'))) {
+        if (isCancelled) {
           console.log('[Payment Processing] Payment cancelled by user.');
           Toast.show({
             type: 'info',
             text1: 'Payment Not Settled',
             text2: 'Job remains unsettled. Tap "Pay Now" to finalize payment anytime.'
           });
-          router.replace({
-            pathname: '/(client)/(modals)/job-detail',
-            params: { id: jobId }
-          });
-        } else {
-          const errorMsg = e?.description || e?.message || 'Payment transaction failed';
-          router.replace({
-            pathname: '/(client)/(modals)/payment-failed',
-            params: { error: errorMsg, jobId, rate }
-          });
+          router.replace({ pathname: '/(client)/(modals)/job-detail', params: { id: jobId } });
+          return;
         }
+
+        // If native checkout threw TypeError (e.g. module unlinked in Expo Go), launch Razorpay Web Gateway Checkout inside WebBrowser
+        if (errStr.includes("Cannot read property 'open' of null") || errStr.includes("unlinked") || !RazorpayCheckout) {
+          console.log('[Payment Processing] Native SDK unlinked in Expo Go. Launching Razorpay Web Gateway...');
+          try {
+            const apiBase = api.defaults.baseURL || '';
+            const checkoutPageUrl = `${apiBase}/payments/checkout-page?orderId=${fetchedOrderId}&amount=${rateVal}&jobId=${jobId}&name=${encodeURIComponent(currentUser?.name || '')}&email=${encodeURIComponent(currentUser?.email || '')}&contact=${encodeURIComponent(currentUser?.phone || '')}`;
+
+            const result = await WebBrowser.openAuthSessionAsync(checkoutPageUrl, 'workde://');
+
+            if (result.type === 'success' && result.url) {
+              if (result.url.includes('payment-cancelled')) {
+                Toast.show({
+                  type: 'info',
+                  text1: 'Payment Not Settled',
+                  text2: 'Job remains unsettled. Tap "Pay Now" to finalize payment anytime.'
+                });
+                router.replace({ pathname: '/(client)/(modals)/job-detail', params: { id: jobId } });
+                return;
+              }
+
+              const rzpOrderId = getQueryParam(result.url, 'razorpay_order_id') || fetchedOrderId;
+              const rzpPaymentId = getQueryParam(result.url, 'razorpay_payment_id');
+              const rzpSig = getQueryParam(result.url, 'razorpay_signature');
+              const failureErr = getQueryParam(result.url, 'error');
+
+              if (failureErr) {
+                router.replace({ pathname: '/(client)/(modals)/payment-failed', params: { error: failureErr, jobId, rate } });
+                return;
+              }
+
+              if (rzpPaymentId && rzpSig) {
+                await api.post('/payments/confirm', {
+                  razorpayOrderId: rzpOrderId,
+                  razorpayPaymentId: rzpPaymentId,
+                  razorpaySignature: rzpSig,
+                  jobId
+                });
+
+                queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
+                queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
+                router.replace({ pathname: '/(client)/(modals)/payment-success', params: { jobId, rate } });
+                return;
+              }
+            }
+
+            // If browser modal closed without finishing payment
+            Toast.show({
+              type: 'info',
+              text1: 'Payment Not Settled',
+              text2: 'Job remains unsettled. Tap "Pay Now" to finalize payment anytime.'
+            });
+            router.replace({ pathname: '/(client)/(modals)/job-detail', params: { id: jobId } });
+            return;
+          } catch (webErr: any) {
+            console.error('[Payment Processing] Web Checkout Error:', webErr.message || webErr);
+            router.replace({
+              pathname: '/(client)/(modals)/payment-failed',
+              params: { error: webErr.message || 'Payment gateway failed', jobId, rate }
+            });
+            return;
+          }
+        }
+
+        const errorMsg = e?.description || e?.message || 'Payment transaction failed';
+        router.replace({
+          pathname: '/(client)/(modals)/payment-failed',
+          params: { error: errorMsg, jobId, rate }
+        });
       }
     };
 
@@ -199,49 +213,6 @@ export default function PaymentProcessing() {
       backHandler.remove();
     };
   }, []);
-
-  if (showDevFallback) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.previewCard}>
-          <View style={styles.iconCircle}>
-            <Feather name="credit-card" size={36} color="#FF6B1A" />
-          </View>
-          <Text style={styles.title}>Razorpay Gateway Preview</Text>
-          <Text style={styles.subtitle}>
-            Razorpay Native Checkout is unavailable in Expo Go preview mode. Select an option below to proceed:
-          </Text>
-
-          <TouchableOpacity 
-            style={styles.simulateBtn} 
-            onPress={() => handleSimulatePayment(orderId)}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.simulateBtnText}>Simulate Test Payment (Dev)</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.cancelBtn} 
-            onPress={() => {
-              Toast.show({
-                type: 'info',
-                text1: 'Payment Cancelled',
-                text2: 'Job remains unsettled until payment is finalized.'
-              });
-              router.replace({ pathname: '/(client)/(modals)/job-detail', params: { id: jobId } });
-            }}
-            disabled={isProcessing}
-          >
-            <Text style={styles.cancelBtnText}>Cancel & Pay Later</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -253,13 +224,30 @@ export default function PaymentProcessing() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgPage, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
-  title: { fontFamily: typography.fontDisplay, fontSize: 22, fontWeight: '800', color: colors.textPrimary, marginTop: spacing.md, marginBottom: spacing.sm, textAlign: 'center' },
-  subtitle: { fontFamily: typography.fontBody, fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.lg, lineHeight: 20 },
-  previewCard: { backgroundColor: '#FFFFFF', padding: 24, borderRadius: 20, borderWidth: 1, borderColor: '#EEE0CC', width: '100%', alignItems: 'center' },
-  iconCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#FFF0D6', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  simulateBtn: { backgroundColor: '#FF6B1A', width: '100%', paddingVertical: 14, borderRadius: radius.full, alignItems: 'center', marginBottom: 12 },
-  simulateBtnText: { fontFamily: typography.fontDisplay, fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-  cancelBtn: { borderWidth: 1, borderColor: colors.border2, width: '100%', paddingVertical: 14, borderRadius: radius.full, alignItems: 'center' },
-  cancelBtnText: { fontFamily: typography.fontBody, fontSize: 15, fontWeight: '700', color: colors.textPrimary }
+  container: {
+    flex: 1,
+    backgroundColor: colors.bgPage,
+    alignItems: 'center',
+    justify: 'center',
+    padding: spacing.xl,
+  },
+  title: {
+    fontFamily: typography.fontDisplay,
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontFamily: typography.fontBody,
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
 });
+
+
