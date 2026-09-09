@@ -302,7 +302,7 @@ export const handleRazorpayWebhook = async (req: Request, res: Response): Promis
  */
 export const renderCheckoutPage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { orderId, amount, jobId, name, email, contact } = req.query;
+    const { orderId, amount, jobId, name, email, contact, redirectUri } = req.query;
 
     if (!orderId || !amount || !jobId) {
       res.status(400).send('Missing required payment parameters');
@@ -311,6 +311,7 @@ export const renderCheckoutPage = async (req: Request, res: Response): Promise<v
 
     const keyId = process.env.RAZORPAY_KEY_ID || 'rzp_test_TZtFjRx85UYAef';
     const amountInPaise = Math.round(parseFloat(amount as string) * 100);
+    const baseRedirect = (redirectUri as string) || 'gigwork://payment-callback';
 
     const html = `<!DOCTYPE html>
 <html>
@@ -356,6 +357,12 @@ export const renderCheckoutPage = async (req: Request, res: Response): Promise<v
   <p>Please complete your payment in the checkout window...</p>
 
   <script>
+    var baseRedirect = ${JSON.stringify(baseRedirect)};
+    function sendRedirect(params) {
+      var separator = baseRedirect.indexOf('?') !== -1 ? '&' : '?';
+      window.location.href = baseRedirect + separator + params;
+    }
+
     var options = {
       "key": "${keyId}",
       "amount": "${amountInPaise}",
@@ -370,15 +377,14 @@ export const renderCheckoutPage = async (req: Request, res: Response): Promise<v
       },
       "theme": { "color": "#FF6B1A" },
       "handler": function (response) {
-        var redirectUrl = "workde://payment-success?jobId=${jobId}"
+        sendRedirect("status=success&jobId=${jobId}"
           + "&razorpay_order_id=" + encodeURIComponent(response.razorpay_order_id || '')
           + "&razorpay_payment_id=" + encodeURIComponent(response.razorpay_payment_id || '')
-          + "&razorpay_signature=" + encodeURIComponent(response.razorpay_signature || '');
-        window.location.href = redirectUrl;
+          + "&razorpay_signature=" + encodeURIComponent(response.razorpay_signature || ''));
       },
       "modal": {
         "ondismiss": function() {
-          window.location.href = "workde://payment-cancelled?jobId=${jobId}";
+          sendRedirect("status=cancelled&jobId=${jobId}");
         }
       }
     };
@@ -386,7 +392,7 @@ export const renderCheckoutPage = async (req: Request, res: Response): Promise<v
     var rzp = new Razorpay(options);
     rzp.on('payment.failed', function (resp) {
       var err = (resp.error && resp.error.description) ? resp.error.description : 'Payment Failed';
-      window.location.href = "workde://payment-failed?jobId=${jobId}&error=" + encodeURIComponent(err);
+      sendRedirect("status=failed&jobId=${jobId}&error=" + encodeURIComponent(err));
     });
 
     window.onload = function() {
@@ -403,4 +409,5 @@ export const renderCheckoutPage = async (req: Request, res: Response): Promise<v
     res.status(500).send('Failed to load payment checkout page');
   }
 };
+
 

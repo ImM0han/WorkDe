@@ -24,7 +24,14 @@ export default function ClientModalsLayout() {
       <Stack.Screen name="extend-work" />
       <Stack.Screen name="payment" />
       <Stack.Screen name="payment-method" />
-      <Stack.Screen name="payment-processing" />
+      <Stack.Screen 
+        name="payment-processing" 
+        options={{ 
+          presentation: 'transparentModal',
+          animation: 'fade',
+          contentStyle: { backgroundColor: 'transparent' }
+        }} 
+      />
       <Stack.Screen name="payment-success" />
       <Stack.Screen name="payment-failed" />
     </Stack>

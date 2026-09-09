@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as Location from 'expo-location';
 import { useSocketStore } from '../stores/socketStore';
-import { api } from '../services/apiClient';
+import api from '../services/apiClient';
 
 export function usePartnerTracking(enabled: boolean) {
   const { socket } = useSocketStore();
