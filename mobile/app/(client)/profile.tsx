@@ -71,7 +71,7 @@ export default function ClientProfileScreen() {
           <View>
             <Text style={styles.menuText}> {t('profile.savedAddresses') || 'Saved Addresses'}</Text>
             <Text style={{ fontFamily: 'Nunito-SemiBold', fontSize: 12, color: '#6B5C4E', marginTop: 2 }}>
-              {addressCount} {t('profile.saved') || 'saved'}
+              {addressCount} {t('addresses saved') || 'saved'}
             </Text>
           </View>
           <Text style={styles.menuArrow}>→</Text>
