@@ -52,12 +52,35 @@ export default function PaymentProcessing() {
 
     const processPayment = async () => {
       const currentUser = useAuthStore.getState().user;
-      const rateVal = parseFloat(rate || '0');
+      let rateVal = parseFloat(rate || '0');
 
-      if (!jobId || rateVal <= 0) {
+      if (!jobId) {
         router.replace({
           pathname: '/(client)/(modals)/payment-failed',
-          params: { error: 'Invalid Job ID or payment amount', jobId, rate }
+          params: { error: 'Missing Job ID', jobId: jobId || '', rate: rate || '' }
+        });
+        return;
+      }
+
+      // Fallback: If rate is missing or 0, fetch actual rate/billableAmount from backend
+      if (isNaN(rateVal) || rateVal <= 0) {
+        try {
+          console.log(`[Payment Processing] Rate is ${rate}, fetching job details for fallback...`);
+          const jobRes = await api.get(`/jobs/${jobId}`);
+          if (jobRes.data) {
+            const fetchedRate = jobRes.data.billableAmount ?? jobRes.data.rate ?? 0;
+            rateVal = parseFloat(fetchedRate.toString());
+            console.log(`[Payment Processing] Retrieved fallback rate: ₹${rateVal}`);
+          }
+        } catch (jobErr: any) {
+          console.error('[Payment Processing] Failed to fetch fallback job rate:', jobErr.message);
+        }
+      }
+
+      if (isNaN(rateVal) || rateVal <= 0) {
+        router.replace({
+          pathname: '/(client)/(modals)/payment-failed',
+          params: { error: 'Invalid Job ID or payment amount', jobId, rate: rate || '0' }
         });
         return;
       }

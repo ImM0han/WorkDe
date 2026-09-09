@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma';
 import { bucket } from '../services/firebase';
 import { v4 as uuidv4 } from 'uuid';
 import { haversineDistance } from '../utils/haversine';
+import { getJobExpirationCutoff, autoDeleteExpiredJobs } from '../services/jobCleanupService';
 
 const RADIUS_LIMIT = process.env.MAX_DISTANCE_KM 
   ? parseInt(process.env.MAX_DISTANCE_KM, 10) 
@@ -69,9 +70,15 @@ export const getNearbyJobs = async (req: AuthRequest, res: Response): Promise<vo
       res.json([]); return;
     }
 
+    // Auto-delete unaccepted jobs older than 48 hours in background
+    autoDeleteExpiredJobs().catch(() => {});
+
+    const cutoffTime = getJobExpirationCutoff();
+
     const jobs = await prisma.job.findMany({
       where: { 
         status: 'POSTED',
+        createdAt: { gte: cutoffTime },
         ...(partner.gender !== 'FEMALE' ? { femaleOnly: false } : {})
       },
       include: { client: { select: { name: true, avatarUrl: true } } }
@@ -95,8 +102,15 @@ export const acceptJob = async (req: AuthRequest, res: Response): Promise<void> 
     const partnerId = req.user?.partnerId;
     if (!partnerId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
+    const cutoffTime = getJobExpirationCutoff();
     const updatedJob = await prisma.$transaction(async (tx) => {
-      const job = await tx.job.findFirst({ where: { id: jobId, status: 'POSTED' } });
+      const job = await tx.job.findFirst({ 
+        where: { 
+          id: jobId, 
+          status: 'POSTED',
+          createdAt: { gte: cutoffTime }
+        } 
+      });
       if (!job) return null;
       if (job.partnerIds.includes(partnerId)) return 'ALREADY_JOINED';
       
@@ -635,6 +649,13 @@ export const getJobById = async (req: AuthRequest, res: Response): Promise<void>
         feedback: true
       }
     });
+
+    if (job && job.status === 'POSTED' && job.createdAt < getJobExpirationCutoff()) {
+      await prisma.job.delete({ where: { id } }).catch(() => {});
+      res.status(404).json({ error: 'Job has expired after 48 hours and is no longer available' });
+      return;
+    }
+
     res.json(job);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch job' });

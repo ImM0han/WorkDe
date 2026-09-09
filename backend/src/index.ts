@@ -65,8 +65,11 @@ app.use((req, res) => {
   res.status(404).json({ error: `Endpoint '${req.method} ${req.originalUrl}' not found on backend server` });
 });
 
+import { startJobCleanupCron } from './services/jobCleanupService';
+
 const PORT = process.env.PORT || 4000;
 
 httpServer.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  startJobCleanupCron();
 });
