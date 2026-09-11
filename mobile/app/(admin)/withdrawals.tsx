@@ -10,6 +10,7 @@ export default function PayoutProcessingScreen() {
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Pay Modal State
   const [payModalVisible, setPayModalVisible] = useState(false);
@@ -127,6 +128,14 @@ export default function PayoutProcessingScreen() {
     }
   };
 
+  const filteredWithdrawals = withdrawals.filter((w) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.trim().toLowerCase();
+    const name = (w.partner?.user?.name || '').toLowerCase();
+    const phone = (w.partner?.user?.phone || '').toLowerCase();
+    return name.includes(q) || phone.includes(q);
+  });
+
   const renderItem = ({ item }: { item: any }) => {
     const partnerUser = item.partner?.user || {};
     const bank = item.defaultBankAccount || {};
@@ -229,19 +238,44 @@ export default function PayoutProcessingScreen() {
         ))}
       </View>
 
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Feather name="search" size={16} color="#9CA3AF" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name or phone number…"
+          placeholderTextColor="#9CA3AF"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          clearButtonMode="while-editing"
+          returnKeyType="search"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.searchClearBtn}>
+            <Feather name="x" size={14} color="#9CA3AF" />
+          </TouchableOpacity>
+        )}
+      </View>
+
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#FF6B1A" />
         </View>
-      ) : withdrawals.length === 0 ? (
+      ) : filteredWithdrawals.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Feather name="inbox" size={48} color="#C4B5A5" />
-          <Text style={styles.emptyTitle}>No Withdrawal Requests</Text>
-          <Text style={styles.emptySub}>No requests found for status "{selectedStatus}"</Text>
+          <Text style={styles.emptyTitle}>
+            {searchQuery.trim() ? 'No Results Found' : 'No Withdrawal Requests'}
+          </Text>
+          <Text style={styles.emptySub}>
+            {searchQuery.trim()
+              ? `No transactions match "${searchQuery.trim()}"`
+              : `No requests found for status "${selectedStatus}"`}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={withdrawals}
+          data={filteredWithdrawals}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
@@ -354,6 +388,36 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    height: 44,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: 'Nunito-Regular',
+    fontSize: 14,
+    color: '#1C1410',
+    paddingVertical: 0,
+  },
+  searchClearBtn: {
+    padding: 4,
+    marginLeft: 4,
   },
   tabItem: {
     paddingHorizontal: 12,
