@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { changeLanguage } from './index';
@@ -22,7 +22,7 @@ export const useLanguageStore = create<LanguageStore>()(
       markLanguageSelected: () => set({ isLanguageSelected: true }),
     }),
     {
-      name: 'gigwork-language',
+      name: 'wrkup-language',
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

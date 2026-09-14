@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolateColor } from 'react-native-reanimated';
@@ -9,7 +9,7 @@ const { width } = Dimensions.get('window');
 
 const slides = [
   { title: 'Find Work\nNearby', emoji: '🗺️', desc: 'Get matched with clients who need your skills instantly.' },
-  { title: 'Get Paid\nInstantly', emoji: '💰', desc: 'Secure payments straight to your GigWork wallet.' },
+  { title: 'Get Paid\nInstantly', emoji: '💰', desc: 'Secure payments straight to your WrkUp wallet.' },
   { title: 'Verified &\nTrusted', emoji: '✅', desc: 'Join a community of verified professionals.' }
 ];
 

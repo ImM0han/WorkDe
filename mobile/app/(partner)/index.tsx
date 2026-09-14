@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Platform, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -64,7 +64,7 @@ export default function PartnerDashboard() {
 
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-          { headers: { 'User-Agent': 'GigWork/1.0' } }
+          { headers: { 'User-Agent': 'WrkUp/1.0' } }
         );
         const data = await res.json();
         const addr = data.address;

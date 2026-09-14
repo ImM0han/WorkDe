@@ -1,4 +1,4 @@
-import i18n from 'i18next';
+﻿import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -9,7 +9,7 @@ import te from './locales/te.json';
 import mr from './locales/mr.json';
 import ta from './locales/ta.json';
 
-const LANGUAGE_STORAGE_KEY = 'gigwork_language';
+const LANGUAGE_STORAGE_KEY = 'wrkup_language';
 
 export const SUPPORTED_LANGUAGES = [
   { code: 'en', label: 'English',        nativeLabel: 'English',   flag: '🇬🇧' },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
@@ -25,7 +25,7 @@ export default function JobInProgressModal() {
         distanceInterval: 20,
         timeInterval: 15000,
         foregroundService: {
-          notificationTitle: 'GigWork Active',
+          notificationTitle: 'WrkUp Active',
           notificationBody: 'Sharing your location with client',
           notificationColor: '#FF6B1A',
         },

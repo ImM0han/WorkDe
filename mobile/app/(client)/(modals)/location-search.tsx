@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback } from 'react';
 import {
   View, Text, TextInput, FlatList,
   TouchableOpacity, ActivityIndicator, StyleSheet,
@@ -39,7 +39,7 @@ export default function LocationSearch() {
       // Use Photon API which is built on OSM but highly optimized for type-ahead search
       const res = await fetch(
         `https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&bbox=68.1,6.5,97.4,35.5&limit=8`,
-        { headers: { 'User-Agent': 'GigWork/1.0 (contact@gigwork.in)' } }
+        { headers: { 'User-Agent': 'WrkUp/1.0 (contact@WrkUp.in)' } }
       );
       const data = await res.json();
       

@@ -1,6 +1,6 @@
-{
+﻿{
   "app": {
-    "name": "GigWork",
+    "name": "WrkUp",
     "tagline": "Empowering Skilled India"
   },
   "common": {
@@ -37,7 +37,7 @@
   },
   "auth": {
     "welcomeBack": "Welcome Back!",
-    "loginTitle": "Login to GigWork",
+    "loginTitle": "Login to WrkUp",
     "signupTitle": "Create Account",
     "phoneLabel": "Phone Number",
     "phonePlaceholder": "Enter 10-digit number",
@@ -75,7 +75,7 @@
     "slide1Title": "Find Work Nearby",
     "slide1Subtitle": "Browse hundreds of local gig jobs matching your skills",
     "slide2Title": "Get Paid Instantly",
-    "slide2Subtitle": "Secure payments directly to your GigWork wallet",
+    "slide2Subtitle": "Secure payments directly to your WrkUp wallet",
     "slide3Title": "Verified & Trusted",
     "slide3Subtitle": "Aadhaar-verified workers and KYC-checked clients"
   },
@@ -193,7 +193,7 @@
     "language": "Language",
     "settings": "Settings",
     "help": "Help & Support",
-    "about": "About GigWork",
+    "about": "About WrkUp",
     "logout": "Logout",
     "logoutConfirm": "Are you sure you want to logout?",
     "changePassword": "Change Password",

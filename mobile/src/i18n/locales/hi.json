@@ -1,6 +1,6 @@
-{
+﻿{
   "app": {
-    "name": "GigWork",
+    "name": "WrkUp",
     "tagline": "कुशल भारत को सशक्त बनाना"
   },
   "common": {
@@ -37,7 +37,7 @@
   },
   "auth": {
     "welcomeBack": "वापसी पर स्वागत है!",
-    "loginTitle": "GigWork में लॉगिन करें",
+    "loginTitle": "WrkUp में लॉगिन करें",
     "signupTitle": "अकाउंट बनाएं",
     "phoneLabel": "फोन नंबर",
     "phonePlaceholder": "10 अंकों का नंबर डालें",
@@ -75,7 +75,7 @@
     "slide1Title": "पास में काम खोजें",
     "slide1Subtitle": "अपने कौशल के अनुसार स्थानीय गिग नौकरियाँ ब्राउज़ करें",
     "slide2Title": "तुरंत भुगतान पाएं",
-    "slide2Subtitle": "GigWork वॉलेट में सुरक्षित भुगतान सीधे",
+    "slide2Subtitle": "WrkUp वॉलेट में सुरक्षित भुगतान सीधे",
     "slide3Title": "सत्यापित और विश्वसनीय",
     "slide3Subtitle": "आधार-सत्यापित कार्यकर्ता और KYC-जाँचे ग्राहक"
   },

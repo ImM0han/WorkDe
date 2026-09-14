@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
@@ -73,7 +73,7 @@ export const useAuthStore = create<AuthStore>()(
       clearPendingAuth: () => set({ pendingAuth: null }),
     }),
     {
-      name: 'gigwork-auth',
+      name: 'wrkup-auth',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({ user: state.user, role: state.role }),
     }

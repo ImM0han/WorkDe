@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -29,7 +29,7 @@ export default function RoleSelectScreen() {
         { top: 0.22, bottom: 0.78, left: 0.0, right: 0.10 },
         { top: 0.22, bottom: 0.78, left: 0.90, right: 1.0 }
       ]} />
-      <Text style={styles.title}>How do you want to use GigWork?</Text>
+      <Text style={styles.title}>How do you want to use WrkUp?</Text>
       
       <View style={styles.cardsContainer}>
         <TouchableOpacity 

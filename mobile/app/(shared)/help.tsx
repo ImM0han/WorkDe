@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, LayoutAnimation, Platform, UIManager, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -65,7 +65,7 @@ export default function HelpSupportScreen() {
         ))}
 
         <Text style={styles.versionText}>
-          GigWork v{Constants.expoConfig?.version || '1.0.0'}
+          WrkUp v{Constants.expoConfig?.version || '1.0.0'}
         </Text>
       </ScrollView>
     </SafeAreaView>
