@@ -1,4 +1,4 @@
-import { Expo } from 'expo-server-sdk';
+﻿import { Expo } from 'expo-server-sdk';
 import { prisma } from '../utils/prisma';
 
 const expo = new Expo();
@@ -48,7 +48,7 @@ export const sendPushNotification = async (userId: string, type: PushType | stri
 
     // Resolve title and body from templates
     let title = 'New Notification';
-    let body = 'You have a new update in GigWork.';
+    let body = 'You have a new update in WrkUp.';
 
     if (PUSH_TEMPLATES[type]) {
       title = PUSH_TEMPLATES[type].title;

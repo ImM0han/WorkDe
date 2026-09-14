@@ -1,5 +1,5 @@
-{
-  "name": "gigwork-railway-root",
+﻿{
+  "name": "wrkup-railway-root",
   "version": "1.0.0",
   "description": "Root package.json to help Railway detect Node.js",
   "scripts": {

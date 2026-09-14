@@ -1,4 +1,4 @@
-const fetch = require('node-fetch'); // we can also use dynamic import or just standard axios / fetch in node 18+
+﻿const fetch = require('node-fetch'); // we can also use dynamic import or just standard axios / fetch in node 18+
 
 async function test() {
   const lat = 23.90511;
@@ -6,7 +6,7 @@ async function test() {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-      { headers: { 'User-Agent': 'GigWork/1.0' } }
+      { headers: { 'User-Agent': 'wrkup/1.0' } }
     );
     const data = await res.json();
     console.log('NOMINATIM RESPONSE:');

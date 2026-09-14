@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import crypto from 'crypto';
@@ -311,7 +311,7 @@ export const renderCheckoutPage = async (req: Request, res: Response): Promise<v
 
     const keyId = process.env.RAZORPAY_KEY_ID || 'rzp_test_TZtFjRx85UYAef';
     const amountInPaise = Math.round(parseFloat(amount as string) * 100);
-    const baseRedirect = (redirectUri as string) || 'gigwork://payment-callback';
+    const baseRedirect = (redirectUri as string) || 'wrkup://payment-callback';
 
     const html = `<!DOCTYPE html>
 <html>
