@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -183,7 +183,8 @@ export default function AddAddressScreen() {
   };
 
   const handleSearch = () => {
-    router.push(`/(client)/(modals)/location-search`);
+    // Forward returnToPostJob so that if the user came from post-job, we preserve context
+    router.push(`/(client)/(modals)/location-search${returnToPostJob ? '?returnToPostJob=true' : ''}`);
   };
 
   const handleDropPin = () => {
@@ -224,7 +225,8 @@ export default function AddAddressScreen() {
       queryClient.invalidateQueries({ queryKey: ['savedAddresses'] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Toast.show({ type: 'success', text1: 'Address saved successfully!' });
-      if (returnToPostJob) {
+      if (returnToPostJob === 'true' || returnToPostJob === true) {
+        // Set the new address as the picked location so post-job auto-selects it
         useLocationStore.getState().setPickedLocation({
           lat: data.data.lat,
           lng: data.data.lng,
@@ -233,7 +235,8 @@ export default function AddAddressScreen() {
           state: data.data.state,
           pincode: data.data.pincode,
         });
-        router.back();
+        // Navigate directly back to post-job — avoids broken back-stack
+        router.navigate('/(client)/post-job');
       } else {
         router.back();
       }
@@ -284,7 +287,7 @@ export default function AddAddressScreen() {
               rotateEnabled={false}
               zoomEnabled={false}
               onPress={() => {
-                router.push('/(client)/(modals)/location-search');
+                router.push(`/(client)/(modals)/location-search${returnToPostJob ? '?returnToPostJob=true' : ''}`);
               }}
             >
               <Marker

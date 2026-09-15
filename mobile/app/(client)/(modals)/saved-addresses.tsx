@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import AddressCard from '../../../src/components/AddressCard';
@@ -9,6 +9,7 @@ import api from '../../../src/services/apiClient';
 
 export default function SavedAddresses() {
   const queryClient = useQueryClient();
+  const { returnToPostJob } = useLocalSearchParams<{ returnToPostJob?: string }>();
 
   const { data: addresses = [], isLoading } = useQuery({
     queryKey: ['savedAddresses'],
@@ -69,7 +70,11 @@ export default function SavedAddresses() {
         {/* Add New Address button — always at the top */}
         <TouchableOpacity
           style={styles.addNewBtn}
-          onPress={() => router.push('/(client)/(modals)/add-address')}
+          onPress={() => router.push(
+            returnToPostJob === 'true'
+              ? '/(client)/(modals)/add-address?returnToPostJob=true'
+              : '/(client)/(modals)/add-address'
+          )}
         >
           <Text style={styles.addNewIcon}>＋</Text>
           <View>
@@ -86,7 +91,11 @@ export default function SavedAddresses() {
             key={addr.id}
             address={addr}
             mode="manage"
-            onEdit={() => router.push(`/(client)/(modals)/add-address?addressId=${addr.id}`)}
+            onEdit={() => router.push(
+              returnToPostJob === 'true'
+                ? `/(client)/(modals)/add-address?addressId=${addr.id}&returnToPostJob=true`
+                : `/(client)/(modals)/add-address?addressId=${addr.id}`
+            )}
             onDelete={() => handleDelete(addr.id)}
             onSetDefault={() => setDefaultMutation.mutate(addr.id)}
           />

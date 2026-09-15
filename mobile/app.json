@@ -3,7 +3,7 @@
     "name": "WrkUp",
     "slug": "gigwork",
     "version": "1.0.0",
-    "scheme": "WrkUp",
+    "scheme": "wrkup",
     "sdkVersion": "54.0.0",
     "newArchEnabled": true,
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
+      "resizeMode": "cover",
       "backgroundColor": "#1A0C02"
     },
     "ios": {
