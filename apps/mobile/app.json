@@ -39,7 +39,6 @@
         "backgroundColor": "#1A0C02"
       },
       "package": "com.WrkUp.app",
-      "versionCode": 3,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",

@@ -23,7 +23,7 @@ async function main() {
     const user = await prisma.user.upsert({
       where: { phone: pd.phone },
       create: { phone: pd.phone, name: pd.name, role: 'PARTNER', passwordHash, isVerified: true, aadhaarStatus: 'VERIFIED' },
-      update: {},
+      update: { name: pd.name },
     });
     await prisma.partner.upsert({
       where: { userId: user.id },

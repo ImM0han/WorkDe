@@ -133,7 +133,7 @@ export async function verifyAadhaarOtp(clientId: string, otp: string): Promise<A
     }
 
     return {
-      fullName: 'TEST AADHAAR USER',
+      fullName: '',
       dob: '1995-08-15',
       gender: 'M',
       address: {
@@ -183,7 +183,7 @@ export async function verifyAadhaarOtp(clientId: string, otp: string): Promise<A
   } catch (error: any) {
     console.warn(`[Sandbox Service] Real Sandbox verification API failed (${error.message || error}). Falling back to simulated verification.`);
     return {
-      fullName: 'TEST AADHAAR USER',
+      fullName: '',
       dob: '1995-08-15',
       gender: 'M',
       address: {

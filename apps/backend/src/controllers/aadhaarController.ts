@@ -73,18 +73,20 @@ export const verifyAadhaarOtp = async (req: AuthRequest, res: Response): Promise
         res.status(400).json({ error: 'Invalid OTP' });
         return;
       }
-      nameToStore = 'TEST AADHAAR USER';
+      nameToStore = null;
     } else {
       // Verify real OTP via Sandbox API
       try {
         const extResult = await extVerifyOtp(clientId, otp);
-        nameToStore = extResult.fullName;
+        if (extResult.fullName && !extResult.fullName.toUpperCase().includes('TEST AADHAAR') && extResult.fullName.toUpperCase() !== 'N/A') {
+          nameToStore = extResult.fullName;
+        }
         if (extResult.dob) {
           dobToStore = new Date(extResult.dob);
         }
       } catch (err: any) {
         if (otp === '123456' || /^\d{6}$/.test(otp)) {
-          nameToStore = 'TEST AADHAAR USER';
+          nameToStore = null;
         } else {
           res.status(400).json({ error: err.message || 'Invalid OTP or verification failed' });
           return;
@@ -92,16 +94,27 @@ export const verifyAadhaarOtp = async (req: AuthRequest, res: Response): Promise
       }
     }
 
+    const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+
+    const updateData: any = {
+      aadhaarStatus: 'PROCESSING',
+      aadhaarNumber: aadhaarNumber || null,
+      aadhaarOtp: otp || '123456',
+      ...(dobToStore && { dob: dobToStore })
+    };
+
+    // Only update name if a valid real name was retrieved from live KYC
+    if (nameToStore && !nameToStore.toUpperCase().includes('TEST AADHAAR') && nameToStore.toUpperCase() !== 'N/A') {
+      updateData.name = nameToStore;
+    } else if (existingUser?.name && existingUser.name.toUpperCase().includes('TEST AADHAAR')) {
+      // If user's name was previously set to TEST AADHAAR USER, clean it up
+      updateData.name = existingUser.role === 'PARTNER' ? 'Partner User' : 'App User';
+    }
+
     // Success: Update database to PROCESSING for Admin approval
     await prisma.user.update({
       where: { id: userId },
-      data: { 
-        aadhaarStatus: 'PROCESSING',
-        aadhaarNumber: aadhaarNumber || null,
-        aadhaarOtp: otp || '123456',
-        ...(dobToStore && { dob: dobToStore }),
-        ...(nameToStore && { name: nameToStore })
-      } as any
+      data: updateData
     });
 
     otpCache.delete(cacheKey);

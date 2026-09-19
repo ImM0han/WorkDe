@@ -2,6 +2,9 @@
   "name": "wrkup-monorepo",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "turbo run dev",
     "start": "cd apps/backend && npm start",
