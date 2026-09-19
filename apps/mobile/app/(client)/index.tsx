@@ -11,6 +11,8 @@ import api from '../../src/services/apiClient';
 import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 
+import { PermissionModal } from '../../src/components/PermissionModal';
+
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 function CategoryPill({ name, icon, isSelected, onPress }: { name: string, icon: string, isSelected: boolean, onPress: () => void }) {
@@ -39,15 +41,36 @@ export default function ClientHome() {
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
 
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation({ lat: location.coords.latitude, lng: location.coords.longitude });
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const location = await Location.getCurrentPositionAsync({});
+          setUserLocation({ lat: location.coords.latitude, lng: location.coords.longitude });
+        } else {
+          setShowPermissionModal(true);
+        }
+      } catch (err) {
+        setShowPermissionModal(true);
+      }
     })();
   }, []);
+
+  const handleAllowPermission = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setShowPermissionModal(false);
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        setUserLocation({ lat: location.coords.latitude, lng: location.coords.longitude });
+      }
+    } catch (err) {
+      setShowPermissionModal(false);
+    }
+  };
 
   const { data: clientJobs } = useQuery({
     queryKey: ['clientJobs'],
@@ -149,6 +172,17 @@ export default function ClientHome() {
           ))
         )}
       </ScrollView>
+
+      <PermissionModal
+        visible={showPermissionModal}
+        title="Enable Location Access"
+        description="We need your location to show nearby service professionals, match workers in real-time, and calculate precise distance."
+        badgeText="RECOMMENDED FOR NEARBY WORKERS"
+        allowButtonText="Allow Location Access"
+        skipButtonText="Not Now"
+        onAllow={handleAllowPermission}
+        onSkip={() => setShowPermissionModal(false)}
+      />
     </View>
   );
 }

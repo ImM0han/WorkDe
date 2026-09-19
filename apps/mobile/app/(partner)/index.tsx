@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Platform, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +13,9 @@ import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
 
+import { PermissionModal } from '../../src/components/PermissionModal';
+import * as Location from 'expo-location';
+
 export default function PartnerDashboard() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -22,6 +25,7 @@ export default function PartnerDashboard() {
   const [currentLocation, setCurrentLocation] = useState<string>('Detecting location...');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [partnerCoords, setPartnerCoords] = useState<{lat: number; lng: number} | null>(null);
+  const [showPermissionModal, setShowPermissionModal] = useState<boolean>(false);
 
   const { data: jobs, refetch, isFetching } = useQuery({
     queryKey: ['nearbyJobs', partnerCoords],
@@ -39,45 +43,66 @@ export default function PartnerDashboard() {
     enabled: !!partnerIdToUse,
   });
 
+  const fetchAndSetLocation = async () => {
+    try {
+      const loc = await Location.getCurrentPositionAsync({});
+      const lat = loc.coords.latitude;
+      const lng = loc.coords.longitude;
+      
+      setPartnerCoords({ lat, lng });
+
+      try {
+        await api.patch('/partner/location', { lat, lng, isOnline: true });
+        queryClient.invalidateQueries({ queryKey: ['nearbyJobs'] });
+      } catch (e) {
+        console.warn('Location REST update failed:', e);
+      }
+
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { 'User-Agent': 'WrkUp/1.0' } }
+      );
+      const data = await res.json();
+      const addr = data.address;
+      if (addr) {
+        setCurrentLocation([addr.suburb || addr.neighbourhood || addr.road, addr.city || addr.town || addr.district].filter(Boolean).join(', '));
+      } else {
+        setCurrentLocation('Location found');
+      }
+    } catch (err) {
+      setCurrentLocation('Location error');
+    }
+  };
+
   useEffect(() => {
     (async () => {
       try {
-        const Location = require('expo-location');
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setCurrentLocation('Location permission denied');
-          return;
-        }
-
-        const loc = await Location.getCurrentPositionAsync({});
-        const lat = loc.coords.latitude;
-        const lng = loc.coords.longitude;
-        
-        setPartnerCoords({ lat, lng });
-
-        try {
-          await api.patch('/partner/location', { lat, lng, isOnline: true });
-          queryClient.invalidateQueries({ queryKey: ['nearbyJobs'] });
-        } catch (e) {
-          console.warn('Location REST update failed:', e);
-        }
-
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-          { headers: { 'User-Agent': 'WrkUp/1.0' } }
-        );
-        const data = await res.json();
-        const addr = data.address;
-        if (addr) {
-          setCurrentLocation([addr.suburb || addr.neighbourhood || addr.road, addr.city || addr.town || addr.district].filter(Boolean).join(', '));
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          await fetchAndSetLocation();
         } else {
-          setCurrentLocation('Location found');
+          setShowPermissionModal(true);
         }
       } catch (err) {
-        setCurrentLocation('Location error');
+        setShowPermissionModal(true);
       }
     })();
   }, [queryClient]);
+
+  const handleAllowPermission = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setShowPermissionModal(false);
+      if (status === 'granted') {
+        await fetchAndSetLocation();
+      } else {
+        setCurrentLocation('Location permission denied');
+      }
+    } catch (err) {
+      setShowPermissionModal(false);
+      setCurrentLocation('Location error');
+    }
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -194,6 +219,17 @@ export default function PartnerDashboard() {
           jobs?.map((job: Job) => <JobCard key={job.id} job={job} onAccept={() => handleAcceptJob(job)} />)
         )}
       </ScrollView>
+
+      <PermissionModal
+        visible={showPermissionModal}
+        title="Enable Location Services"
+        description="Location access is required to receive nearby job alerts, broadcast your status to clients, and track active jobs."
+        badgeText="REQUIRED FOR REAL-TIME JOBS"
+        allowButtonText="Enable Location Services"
+        skipButtonText="Not Now"
+        onAllow={handleAllowPermission}
+        onSkip={() => setShowPermissionModal(false)}
+      />
     </View>
   );
 }
