@@ -12,6 +12,17 @@ export function getApiBaseUrl(): string {
     (Constants.expoConfig?.extra as Record<string, string> | undefined)?.EXPO_PUBLIC_API_URL ||
     DEFAULT_API_URL
   ).trim();
+
+  // Fix accidental duplicate protocol prefixes (e.g. "https://https://", "http://https://")
+  url = url.replace(/^(https?:\/\/)+/gi, (match) => 
+    match.toLowerCase().includes('https') ? 'https://' : 'http://'
+  );
+
+  // If no protocol is provided, default to https://
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
   url = url.replace(/\/+$/, '');
   url = url.replace(/\/api\/v1$/i, '');
   return url;
