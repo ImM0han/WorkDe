@@ -1,0 +1,35 @@
+import { Router } from 'express';
+import multer from 'multer';
+import { 
+  getNearbyJobs, acceptJob, rejectJob, completeJob, createJob, 
+  getClientJobs, cancelJob, extendJob, getPartnerJobs, getJobById, 
+  updateJob, startJob, acceptExtension, declineExtension,
+  acceptStartJob, declineStartJob, finalizeWork
+} from '../controllers/jobController';
+import { authenticateToken } from '../middleware/auth';
+
+const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
+
+router.use(authenticateToken);
+
+router.get('/nearby', getNearbyJobs);
+router.get('/partner', getPartnerJobs);
+router.post('/:id/accept', acceptJob);
+router.post('/:id/reject', rejectJob);
+router.patch('/:id/complete', upload.array('photos', 3), completeJob);
+router.post('/:id/start', startJob);
+router.post('/:id/start-accept', acceptStartJob);
+router.post('/:id/start-decline', declineStartJob);
+router.post('/:id/finalize-work', finalizeWork);
+router.post('/:id/extension/accept', acceptExtension);
+router.post('/:id/extension/decline', declineExtension);
+
+router.post('/', upload.array('photos', 5), createJob);
+router.get('/client', getClientJobs);
+router.get('/:id', getJobById);
+router.patch('/:id', updateJob);
+router.delete('/:id', cancelJob);
+router.post('/:id/extend', extendJob);
+
+export default router;

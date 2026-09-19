@@ -1,0 +1,35 @@
+services:
+  # Node.js Backend Service
+  - type: web
+    name: wrkup-backend
+    env: node
+    rootDir: apps/backend
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Set manually in Render dashboard or link to Render Postgres
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: wrkup-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true # Auto-generated secure random string
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: SOCKET_CORS_ORIGIN
+        value: "*"
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.12.0
+
+  # Redis Service for Geo-Matching & Real-time State
+  - type: redis
+    name: wrkup-redis
+    ipAllowList: [] # Allow internal connections only
+    plan: free

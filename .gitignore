@@ -20,3 +20,8 @@ dist/
 build/
 .prisma/
 node_modules
+backend/seviceAccountKey.json
+
+ADMIN_OPERATIONS_GUIDE.md
+local.properties
+**/local.properties

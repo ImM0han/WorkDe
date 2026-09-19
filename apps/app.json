@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "5438026b-6d16-404c-bb43-fb172d075c48"
+      }
+    },
+    "android": {
+      "package": "com.mohan_saw.wrkuprailwayroot"
+    }
+  }
+}

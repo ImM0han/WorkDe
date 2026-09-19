@@ -1,9 +1,10 @@
 {
-  "name": "gigwork-monorepo",
+  "name": "wrkup-monorepo",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "turbo run dev",
+    "start": "cd apps/backend && npm start",
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",

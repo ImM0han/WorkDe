@@ -1,0 +1,33 @@
+﻿services:
+  # Node.js Backend Server
+  - type: web
+    name: wrkup-backend
+    env: node
+    rootDir: apps/backend
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Set manually in Render dashboard
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: wrkup-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: SOCKET_CORS_ORIGIN
+        value: "*"
+      - key: NODE_ENV
+        value: production
+
+  # Redis Instance for Geo-Matching
+  - type: redis
+    name: wrkup-redis
+    ipAllowList: []
+    plan: free
