@@ -126,8 +126,15 @@ export default function PaymentProcessing() {
         return;
       }
 
+      const cleanPhone = currentUser?.phone ? currentUser.phone.replace(/\D/g, '').slice(-10) : '';
+      const formattedPhone = cleanPhone.length === 10 ? cleanPhone : '9876543210';
+      const formattedEmail = (currentUser?.email && currentUser.email.includes('@'))
+        ? currentUser.email
+        : `${(currentUser?.name || 'client').toLowerCase().replace(/[^a-z0-9]/g, '') || 'client'}@workde.com`;
+      const formattedName = currentUser?.name || 'WorkDe User';
+
       const options = {
-        description: `Payment for Job #${jobId}`,
+        description: `Direct Payment for Job #${jobId}`,
         currency: currencyVal,
         key: rzpKey,
         amount: Math.round(rateVal * 100).toString(),
@@ -135,9 +142,17 @@ export default function PaymentProcessing() {
         order_id: fetchedOrderId,
         theme: { color: '#FF6B1A' },
         prefill: {
-          email: currentUser?.email || 'test@example.com',
-          contact: currentUser?.phone || '9999999999',
-          name: currentUser?.name || 'Test User'
+          email: formattedEmail,
+          contact: formattedPhone,
+          name: formattedName
+        },
+        readonly: {
+          email: true,
+          contact: true,
+          name: true
+        },
+        notes: {
+          jobId: jobId
         }
       };
 
@@ -224,12 +239,20 @@ export default function PaymentProcessing() {
       "amount": "${Math.round(rateVal * 100)}",
       "currency": "INR",
       "name": "WorkDe",
-      "description": "Payment for Job #${jobId}",
+      "description": "Direct Payment for Job #${jobId}",
       "order_id": "${fetchedOrderId}",
       "prefill": {
-        "name": ${JSON.stringify(currentUser?.name || 'Test User')},
-        "email": ${JSON.stringify(currentUser?.email || 'test@example.com')},
-        "contact": ${JSON.stringify(currentUser?.phone || '9999999999')}
+        "name": ${JSON.stringify(formattedName)},
+        "email": ${JSON.stringify(formattedEmail)},
+        "contact": ${JSON.stringify(formattedPhone)}
+      },
+      "readonly": {
+        "email": true,
+        "contact": true,
+        "name": true
+      },
+      "notes": {
+        "jobId": ${JSON.stringify(jobId)}
       },
       "theme": { "color": "#FF6B1A" },
       "handler": function (response) {
