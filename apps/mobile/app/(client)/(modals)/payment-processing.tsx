@@ -126,12 +126,25 @@ export default function PaymentProcessing() {
         return;
       }
 
-      const cleanPhone = currentUser?.phone ? currentUser.phone.replace(/\D/g, '').slice(-10) : '';
-      const formattedPhone = cleanPhone.length === 10 ? cleanPhone : '9876543210';
-      const formattedEmail = (currentUser?.email && currentUser.email.includes('@'))
-        ? currentUser.email
-        : `${(currentUser?.name || 'client').toLowerCase().replace(/[^a-z0-9]/g, '') || 'client'}@workde.com`;
-      const formattedName = currentUser?.name || 'WorkDe User';
+      const configObj = {
+        display: {
+          blocks: {
+            banks: {
+              name: "Pay via UPI, Cards, NetBanking",
+              instruments: [
+                { method: "upi" },
+                { method: "card" },
+                { method: "netbanking" },
+                { method: "wallet" }
+              ]
+            }
+          },
+          sequence: ["block.banks"],
+          preferences: {
+            show_default_blocks: true
+          }
+        }
+      };
 
       const options = {
         description: `Direct Payment for Job #${jobId}`,
@@ -151,6 +164,7 @@ export default function PaymentProcessing() {
           contact: true,
           name: true
         },
+        config: configObj,
         notes: {
           jobId: jobId
         }
@@ -250,6 +264,25 @@ export default function PaymentProcessing() {
         "email": true,
         "contact": true,
         "name": true
+      },
+      "config": {
+        "display": {
+          "blocks": {
+            "banks": {
+              "name": "Pay via UPI, Cards, NetBanking",
+              "instruments": [
+                { "method": "upi" },
+                { "method": "card" },
+                { "method": "netbanking" },
+                { "method": "wallet" }
+              ]
+            }
+          },
+          "sequence": ["block.banks"],
+          "preferences": {
+            "show_default_blocks": true
+          }
+        }
       },
       "notes": {
         "jobId": ${JSON.stringify(jobId)}
