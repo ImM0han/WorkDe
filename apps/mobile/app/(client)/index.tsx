@@ -131,7 +131,7 @@ export default function ClientHome() {
             </View>
             <TouchableOpacity 
               style={styles.payNowBtn}
-              onPress={() => router.push({ pathname: '/(client)/(modals)/payment-method', params: { jobId: pendingPaymentJob.id } })}
+              onPress={() => router.push({ pathname: '/(client)/(modals)/payment-processing', params: { jobId: pendingPaymentJob.id } })}
             >
               <Text style={styles.payNowText}>Pay Now</Text>
             </TouchableOpacity>

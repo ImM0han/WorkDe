@@ -1,23 +1,48 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { colors, typography, spacing, radius } from '../../../src/theme/tokens';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import api from '../../../src/services/apiClient';
+import Toast from 'react-native-toast-message';
 
 export default function EndWorkConfirm() {
   const router = useRouter();
+  const { jobId } = useLocalSearchParams<{ jobId: string }>();
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      if (jobId) {
+        await api.post(`/jobs/${jobId}/finalize-work`);
+      }
+      router.replace({
+        pathname: '/(client)/(modals)/payment-processing',
+        params: { jobId }
+      });
+    } catch (err: any) {
+      console.error('Error finalizing work:', err);
+      Toast.show({ type: 'error', text1: 'Failed to complete work', text2: err.response?.data?.error || err.message });
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.title}>End Work?</Text>
-      <Text style={styles.subtitle}>Are you sure you want to end work? This will generate the final invoice and you will be directed to payment.</Text>
+      <Text style={styles.subtitle}>Are you sure you want to end work? This will generate the final invoice and proceed directly to payment.</Text>
 
       <View style={styles.buttonsRow}>
-        <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()} disabled={loading}>
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.confirmBtn} onPress={() => router.replace('/(client)/(modals)/payment')}>
-          <Text style={styles.confirmText}>Yes, End Work</Text>
+        <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.confirmText}>Yes, End Work</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -61,11 +61,6 @@ export default function ClientProfileScreen() {
           <Text style={styles.menuText}>{t('profile.editProfile') || 'Edit Profile'}</Text>
           <Text style={styles.menuArrow}>→</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(client)/(modals)/payment-method')}>
-          <Text style={styles.menuText}>{t('payment.method') || 'Payment Methods'}</Text>
-          <Text style={styles.menuArrow}>→</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(client)/(modals)/saved-addresses')}>
           <View>

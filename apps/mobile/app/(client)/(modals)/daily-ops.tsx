@@ -70,7 +70,7 @@ export default function DailyOps() {
       queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
       queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
       router.push({
-        pathname: '/(client)/(modals)/payment-method',
+        pathname: '/(client)/(modals)/payment-processing',
         params: { jobId }
       });
     } catch (e) {

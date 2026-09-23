@@ -23,7 +23,7 @@ export default function PaymentFailed() {
         style={styles.retryBtn} 
         onPress={() => {
           if (jobId) {
-            router.replace({ pathname: '/(client)/(modals)/payment-method', params: { jobId, rate } });
+            router.replace({ pathname: '/(client)/(modals)/payment-processing', params: { jobId, rate } });
           } else {
             router.replace('/(client)/jobs');
           }

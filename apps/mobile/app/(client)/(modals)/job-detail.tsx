@@ -232,7 +232,7 @@ export default function JobDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
       queryClient.invalidateQueries({ queryKey: ['activeOpsJobs'] });
       router.push({
-        pathname: '/(client)/(modals)/payment-method',
+        pathname: '/(client)/(modals)/payment-processing',
         params: { jobId: id }
       });
     } catch (err: any) {
@@ -486,7 +486,7 @@ export default function JobDetailScreen() {
               <TouchableOpacity 
                 style={styles.completeJobBtn}
                 onPress={() => router.push({
-                  pathname: '/(client)/(modals)/payment-method',
+                  pathname: '/(client)/(modals)/payment-processing',
                   params: { jobId: id }
                 })}
               >

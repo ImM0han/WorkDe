@@ -303,8 +303,13 @@ export const completeJob = async (req: AuthRequest, res: Response): Promise<void
         return;
       }
 
-      if (jobObj.status !== 'COMPLETED_PENDING_PAYMENT') {
-        res.status(400).json({ error: 'Job status must be COMPLETED_PENDING_PAYMENT to finalize payment' });
+      // Check if payment was completed via Razorpay
+      const paymentRecord = await prisma.payment.findUnique({
+        where: { jobId: id }
+      });
+
+      if (!paymentRecord || paymentRecord.status !== 'COMPLETED') {
+        res.status(400).json({ error: 'Payment has not been completed on Razorpay. Please complete payment before finalizing.' });
         return;
       }
 
@@ -318,47 +323,6 @@ export const completeJob = async (req: AuthRequest, res: Response): Promise<void
           payment: true
         }
       });
-
-      // Credit partner's wallet
-      if (updatedJob.partnerId && updatedJob.payment?.status !== 'COMPLETED') {
-        const grossAmount = updatedJob.billableAmount || updatedJob.rate || 0;
-        const platformFee = 0;
-        const netAmount = grossAmount;
-
-        await prisma.partner.update({
-          where: { id: updatedJob.partnerId },
-          data: { 
-            walletBalance: { increment: netAmount },
-            totalJobs: { increment: 1 }
-          }
-        });
-
-        await prisma.payment.upsert({
-          where: { jobId: updatedJob.id },
-          update: { status: 'COMPLETED', amount: grossAmount, platformFee, netAmount },
-          create: {
-            jobId: updatedJob.id,
-            amount: grossAmount,
-            platformFee,
-            netAmount,
-            status: 'COMPLETED'
-          }
-        });
-      }
-
-      const { getIO } = await import('../socket');
-      const io = getIO();
-      if (io && updatedJob.partner) {
-        const payload = {
-          jobId: updatedJob.id,
-          amount: updatedJob.billableAmount || updatedJob.rate,
-          message: 'Payment completed! Funds credited to your wallet.'
-        };
-        io.to(`user:${updatedJob.partner.userId}`).emit('job:paid', payload);
-        io.to(`user:${updatedJob.partner.userId}`).emit('payment:received', payload);
-        io.to(`partner:${updatedJob.partnerId}`).emit('payment:received', payload);
-        io.to(`partner:${updatedJob.partnerId}`).emit('job:paid', payload);
-      }
 
       res.json(updatedJob);
       return;

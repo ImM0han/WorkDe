@@ -98,7 +98,7 @@ export default function ClientJobs() {
                 await api.post(`/jobs/${item.id}/finalize-work`);
                 queryClient.invalidateQueries({ queryKey: ['clientJobs'] });
                 router.push({
-                  pathname: '/(client)/(modals)/payment-method',
+                  pathname: '/(client)/(modals)/payment-processing',
                   params: { jobId: item.id }
                 });
               } catch (e: any) {
@@ -118,7 +118,7 @@ export default function ClientJobs() {
             style={styles.actionBtnPay}
             onPress={() => {
               router.push({
-                pathname: '/(client)/(modals)/payment-method',
+                pathname: '/(client)/(modals)/payment-processing',
                 params: { jobId: item.id }
               });
             }}

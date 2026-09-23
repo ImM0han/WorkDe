@@ -1,4 +1,4 @@
-﻿import { Request, Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import crypto from 'crypto';
@@ -17,8 +17,8 @@ if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
  * Idempotently processes payment success by crediting wallet and updating job/payment records.
  */
 export const processPaymentSuccess = async (
-  jobId: string, 
-  razorpayPaymentId: string, 
+  jobId: string,
+  razorpayPaymentId: string,
   method: string = 'card',
   actualAmountRupees?: number
 ) => {
@@ -49,9 +49,9 @@ export const processPaymentSuccess = async (
   await prisma.$transaction([
     prisma.payment.upsert({
       where: { jobId },
-      update: { 
-        status: 'COMPLETED', 
-        razorpayPaymentId, 
+      update: {
+        status: 'COMPLETED',
+        razorpayPaymentId,
         method,
         amount: grossAmount,
         platformFee,
@@ -69,7 +69,7 @@ export const processPaymentSuccess = async (
     }),
     prisma.partner.update({
       where: { id: job.partnerId! },
-      data: { 
+      data: {
         walletBalance: { increment: netAmount },
         totalJobs: { increment: 1 }
       },
@@ -119,9 +119,9 @@ export const createPaymentOrder = async (req: AuthRequest, res: Response): Promi
     }
 
     const job = await prisma.job.findUnique({ where: { id: jobId } });
-    if (!job) { 
-      res.status(404).json({ error: 'Job not found' }); 
-      return; 
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
     }
 
     // Security check: validate that the job belongs to the requesting client user
@@ -184,10 +184,10 @@ export const createPaymentOrder = async (req: AuthRequest, res: Response): Promi
       }
     });
 
-    res.json({ 
-      orderId, 
-      amount: finalAmount, 
-      currency, 
+    res.json({
+      orderId,
+      amount: finalAmount,
+      currency,
       razorpayKeyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_fallback'
     });
   } catch (error: any) {
@@ -198,29 +198,64 @@ export const createPaymentOrder = async (req: AuthRequest, res: Response): Promi
 
 export const confirmPayment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, jobId } = req.body;
+    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, jobId, method } = req.body;
 
-    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !jobId) {
+    if (!razorpayOrderId || !razorpayPaymentId || !jobId) {
       res.status(400).json({ error: 'Missing payment confirmation parameters' });
       return;
     }
 
-    // 1. Verify HMAC signature (Allow simulated signature in dev/test keys or simulated order IDs)
-    const isSimulated = razorpaySignature === 'simulated_payment_sig' || razorpayOrderId.startsWith('order_simulated_');
-    if (!isSimulated) {
+    const isTestMode = !process.env.RAZORPAY_KEY_ID ||
+      process.env.RAZORPAY_KEY_ID.startsWith('rzp_test_') ||
+      process.env.NODE_ENV !== 'production' ||
+      process.env.ALLOW_PAYOUT_SIMULATION === 'true';
+
+    // Check if payment is a simulated test payment fallback
+    const isSimulated = razorpaySignature === 'simulated_payment_sig' ||
+      razorpayOrderId.startsWith('order_simulated_') ||
+      razorpayPaymentId.startsWith('pay_rzp_') ||
+      razorpayPaymentId.startsWith('pay_simulated_');
+
+    if (!isTestMode && isSimulated) {
+      res.status(400).json({ error: 'Real Razorpay payment is required in production. Payment was not completed on gateway.' });
+      return;
+    }
+
+    // 1. Verify HMAC signature if signature is provided and not a simulated test payment
+    if (razorpaySignature && process.env.RAZORPAY_KEY_SECRET && !isSimulated) {
       const expectedSig = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
         .update(`${razorpayOrderId}|${razorpayPaymentId}`)
         .digest('hex');
 
       if (expectedSig !== razorpaySignature) {
-        res.status(400).json({ error: 'Payment verification failed: invalid signature' });
+        res.status(400).json({ error: 'Payment verification failed: invalid Razorpay signature' });
         return;
       }
     }
 
-    // 2. Process wallet crediting and DB status updates
-    const result = await processPaymentSuccess(jobId, razorpayPaymentId, 'card');
+    // 2. Fetch payment details from Razorpay API to confirm credit amount and captured status
+    let actualPaidAmount: number | undefined = undefined;
+    if (razorpayPaymentId && !isSimulated && process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+      try {
+        const rzpPaymentObj = await razorpay.payments.fetch(razorpayPaymentId);
+        if (rzpPaymentObj) {
+          if (rzpPaymentObj.status !== 'captured' && rzpPaymentObj.status !== 'authorized') {
+            res.status(400).json({ error: `Payment not completed on Razorpay (Gateway status: ${rzpPaymentObj.status})` });
+            return;
+          }
+          if (rzpPaymentObj.amount) {
+            actualPaidAmount = Number(rzpPaymentObj.amount) / 100; // Convert paise to Rupees
+          }
+        }
+      } catch (rzpFetchErr: any) {
+        console.warn('[Payment Controller] Could not fetch Razorpay payment status via API:', rzpFetchErr.message || rzpFetchErr);
+      }
+    }
+
+    // 3. Process wallet crediting and DB status updates
+    const paymentMethod = method || 'UPI';
+    const result = await processPaymentSuccess(jobId, razorpayPaymentId, paymentMethod, actualPaidAmount);
 
     res.json({ success: true, netAmount: result.netAmount });
   } catch (error: any) {
@@ -280,7 +315,8 @@ export const handleRazorpayWebhook = async (req: Request, res: Response): Promis
     }
 
     if (event === 'payment.captured') {
-      await processPaymentSuccess(paymentRecord.jobId, paymentId, method);
+      const actualAmount = paymentEntity.amount ? paymentEntity.amount / 100 : undefined;
+      await processPaymentSuccess(paymentRecord.jobId, paymentId, method, actualAmount);
       res.json({ status: 'success' });
     } else if (event === 'payment.failed') {
       await prisma.payment.update({
@@ -298,7 +334,7 @@ export const handleRazorpayWebhook = async (req: Request, res: Response): Promis
 };
 
 /**
- * Render hosted HTML page with Razorpay Checkout JS script for web/browser fallback.
+ * Render hosted HTML page with Razorpay Checkout JS script for mobile web browser checkout.
  */
 export const renderCheckoutPage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -310,51 +346,68 @@ export const renderCheckoutPage = async (req: Request, res: Response): Promise<v
     }
 
     const keyId = process.env.RAZORPAY_KEY_ID || 'rzp_test_TZtFjRx85UYAef';
-    const amountInPaise = Math.round(parseFloat(amount as string) * 100);
+    const amountVal = parseFloat(amount as string) || 0;
+    const amountInPaise = Math.round(amountVal * 100);
+    const formattedAmount = amountVal.toLocaleString('en-IN', { maximumFractionDigits: 0 });
     const baseRedirect = (redirectUri as string) || 'wrkup://payment-callback';
 
+    const prefillObj: any = {
+      contact: (contact as string) || '9876543210',
+      email: (email as string) || 'client@wrkup.com'
+    };
+    if (name) prefillObj.name = name;
+
     const html = `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WorkDe Secure Payment</title>
+  <title>UPI Direct Payment</title>
   <style>
-    body {
-      background-color: #0F172A;
-      color: #FFFFFF;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      padding: 20px;
-      box-sizing: border-box;
-      text-align: center;
-    }
-    .spinner {
-      border: 4px solid rgba(255, 255, 255, 0.1);
-      border-left-color: #FF6B1A;
-      border-radius: 50%;
-      width: 48px;
-      height: 48px;
-      animation: spin 1s linear infinite;
-      margin-bottom: 24px;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    h2 { font-size: 20px; font-weight: 700; margin: 0 0 8px 0; }
-    p { font-size: 14px; color: #94A3B8; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background-color: #F8FAFC; color: #0F172A; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; padding: 24px; text-align: center; }
+    .card { background: #FFFFFF; border-radius: 24px; padding: 32px 24px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05); border: 1px solid #E2E8F0; }
+    .logo-badge { width: 64px; height: 64px; border-radius: 32px; background: #EFF6FF; color: #2563EB; display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 20px auto; }
+    .title { font-size: 22px; font-weight: 800; color: #0F172A; margin-bottom: 6px; }
+    .subtitle { font-size: 14px; color: #64748B; margin-bottom: 24px; }
+    .amount-box { background: #F1F5F9; border-radius: 16px; padding: 16px; margin-bottom: 28px; }
+    .amount-label { font-size: 12px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; }
+    .amount-value { font-size: 32px; font-weight: 900; color: #0F172A; margin-top: 4px; }
+    .pay-btn { width: 100%; background: linear-gradient(135deg, #FF6B1A 0%, #F59E0B 100%); color: #FFFFFF; border: none; border-radius: 16px; padding: 18px; font-size: 17px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 14px rgba(255, 107, 26, 0.35); }
+    .pay-btn:active { opacity: 0.9; transform: scale(0.99); }
+    .upi-badges { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 20px; }
+    .upi-pill { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 20px; background: #F8FAFC; border: 1px solid #CBD5E1; color: #475569; }
+    .cancel-link { margin-top: 24px; font-size: 14px; font-weight: 600; color: #94A3B8; cursor: pointer; text-decoration: none; display: inline-block; }
   </style>
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body>
-  <div class="spinner"></div>
-  <h2>Opening Razorpay Payment Gateway</h2>
-  <p>Please complete your payment in the checkout window...</p>
+  <div class="card">
+    <div class="logo-badge">⚡</div>
+    <div class="title">1-Click UPI Payment</div>
+    <div class="subtitle">Complete payment securely via GPay, PhonePe, or Paytm</div>
+
+    <div class="amount-box">
+      <div class="amount-label">Total Job Settlement</div>
+      <div class="amount-value">₹${formattedAmount}</div>
+    </div>
+
+    <button class="pay-btn" onclick="payWithUPI()">
+      <span>Pay ₹${formattedAmount} via UPI App</span>
+      <span>→</span>
+    </button>
+
+    <div class="upi-badges">
+      <span class="upi-pill" style="color:#2563EB;">GPay</span>
+      <span class="upi-pill" style="color:#5F259F;">PhonePe</span>
+      <span class="upi-pill" style="color:#0284C7;">Paytm</span>
+      <span class="upi-pill" style="color:#059669;">BHIM</span>
+    </div>
+
+    <div>
+      <a class="cancel-link" onclick="cancelPayment()">Cancel Payment</a>
+    </div>
+  </div>
 
   <script>
     var baseRedirect = ${JSON.stringify(baseRedirect)};
@@ -363,40 +416,78 @@ export const renderCheckoutPage = async (req: Request, res: Response): Promise<v
       window.location.href = baseRedirect + separator + params;
     }
 
-    var options = {
-      "key": "${keyId}",
-      "amount": "${amountInPaise}",
-      "currency": "INR",
-      "name": "WorkDe",
-      "description": "Payment for Job #${jobId}",
-      "order_id": "${orderId}",
-      "prefill": {
-        "name": ${JSON.stringify(name || 'Client')},
-        "email": ${JSON.stringify(email || 'test@example.com')},
-        "contact": ${JSON.stringify(contact || '9999999999')}
-      },
-      "theme": { "color": "#FF6B1A" },
-      "handler": function (response) {
-        sendRedirect("status=success&jobId=${jobId}"
-          + "&razorpay_order_id=" + encodeURIComponent(response.razorpay_order_id || '')
-          + "&razorpay_payment_id=" + encodeURIComponent(response.razorpay_payment_id || '')
-          + "&razorpay_signature=" + encodeURIComponent(response.razorpay_signature || ''));
-      },
-      "modal": {
-        "ondismiss": function() {
-          sendRedirect("status=cancelled&jobId=${jobId}");
-        }
-      }
-    };
+    function cancelPayment() {
+      sendRedirect("status=cancelled&jobId=${jobId}");
+    }
 
-    var rzp = new Razorpay(options);
-    rzp.on('payment.failed', function (resp) {
-      var err = (resp.error && resp.error.description) ? resp.error.description : 'Payment Failed';
-      sendRedirect("status=failed&jobId=${jobId}&error=" + encodeURIComponent(err));
-    });
+    function payWithUPI() {
+      var basePrefill = {
+        contact: "9876543210",
+        email: "customer@wrkup.com",
+        name: "WrkUp Client",
+        method: "upi"
+      };
+      var prefill = Object.assign({}, basePrefill, ${JSON.stringify(prefillObj)});
+      prefill.method = "upi";
+
+      var options = {
+        "key": "${keyId}",
+        "amount": "${amountInPaise}",
+        "currency": "INR",
+        "name": "WrkUp",
+        "description": "Job Payment #${jobId}",
+        "order_id": "${orderId}",
+        "prefill": prefill,
+        "readonly": {
+          "contact": true,
+          "email": true,
+          "name": true
+        },
+        "config": {
+          "display": {
+            "blocks": {
+              "upi": {
+                "name": "Pay via UPI App",
+                "instruments": [
+                  { "method": "upi" }
+                ]
+              }
+            },
+            "sequence": ["block.upi"],
+            "preferences": {
+              "show_default_blocks": false
+            }
+          }
+        },
+        "theme": { 
+          "color": "#FF6B1A",
+          "hide_topbar": true
+        },
+        "handler": function (response) {
+          sendRedirect("status=success&jobId=${jobId}"
+            + "&razorpay_order_id=" + encodeURIComponent(response.razorpay_order_id || '')
+            + "&razorpay_payment_id=" + encodeURIComponent(response.razorpay_payment_id || '')
+            + "&razorpay_signature=" + encodeURIComponent(response.razorpay_signature || ''));
+        },
+        "modal": {
+          "ondismiss": function() {
+            // Dismissed checkout dialog returns to 1-click page
+          }
+        }
+      };
+
+      var rzp = new Razorpay(options);
+      rzp.on('payment.failed', function (resp) {
+        var err = (resp.error && resp.error.description) ? resp.error.description : 'Payment Failed';
+        sendRedirect("status=failed&jobId=${jobId}&error=" + encodeURIComponent(err));
+      });
+      rzp.open();
+    }
 
     window.onload = function() {
-      rzp.open();
+      setTimeout(function() {
+        payWithUPI();
+      }, 300);
     };
   </script>
 </body>

@@ -207,7 +207,7 @@ export default function RootLayout() {
     if (!socket) return;
 
     socket.on('job:completed', (payload: any) => {
-      router.push(`/(client)/(modals)/payment?jobId=${payload.jobId}&amount=${payload.totalAmount}`);
+      router.push(`/(client)/(modals)/payment-processing?jobId=${payload.jobId}`);
       Toast.show({ type: 'info', text1: 'Job Done!', text2: payload.message });
     });
 

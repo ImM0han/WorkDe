@@ -44,7 +44,7 @@ export const useAdminStore = create<AdminStore>()(
       }
     }),
     {
-      name: 'workde-admin-auth',
+      name: 'WrkUp-admin-auth',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         adminUser: state.adminUser,
